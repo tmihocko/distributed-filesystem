@@ -1,0 +1,20 @@
+---
+BasedOnStyle: LLVM
+UseTab: Always
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 0
+AllowShortLambdasOnASingleLine: All
+BinPackArguments: true
+BinPackParameters: true
+Cpp11BracedListStyle: false
+PointerAlignment: Right
+ReferenceAlignment: Right
+AllowShortFunctionsOnASingleLine: Empty
+SortIncludes: false
+AlignArrayOfStructures: None
+AlwaysBreakTemplateDeclarations: Yes
+AlignAfterOpenBracket: Align
+PackConstructorInitializers: CurrentLine
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
