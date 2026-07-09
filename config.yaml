@@ -1,0 +1,7 @@
+node:
+  node_id: "node_a"
+  host: "127.0.0.1"
+  port: 8000
+
+seed_nodes:
+  - "127.0.0.2"

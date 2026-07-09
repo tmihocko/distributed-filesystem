@@ -6,7 +6,17 @@ set(CMAKE_CXX_COMPILER /opt/homebrew/opt/llvm/bin/clang++)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
-project(PhysicsEngine)
+project(DistributedFilesystem)
+
+
+# yaml-cpp options
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(dependencies/yaml-cpp)
+
+
 
 file(GLOB_RECURSE SOURCES
     "src/*.cpp"
@@ -28,6 +38,16 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 
 # --- rest of your config unchanged ---
 target_include_directories(${PROJECT_NAME} PRIVATE
+    "dependencies/include"
     "src"
 )
 
+if(TARGET yaml-cpp::yaml-cpp)
+    target_link_libraries(${PROJECT_NAME} PRIVATE yaml-cpp::yaml-cpp)
+elseif(TARGET yaml-cpp)
+    target_link_libraries(${PROJECT_NAME} PRIVATE yaml-cpp)
+else()
+    message(FATAL_ERROR "yaml-cpp target not found")
+endif()
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE ASIO_STANDALONE)
