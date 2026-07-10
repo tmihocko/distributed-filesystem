@@ -7,12 +7,9 @@
 
 enum class MessageType : uint16_t {
 	Heartbeat = 1,
-	CreateFileReq = 2,
-	CreateFileResp = 3,
-	WriteChunkReq = 4,
-	WriteChunkResp = 5,
-	ReadChunkReq = 6,
-	ReadChunkResp = 7,
+	Acknowledge = 2,
+	FindPeers = 3,
+	TYPE_END = 8, // For iteration, do not send over network
 };
 
 #pragma pack(push, 1)

@@ -10,9 +10,13 @@ int main(int argc, char *argv[]) {
 
 	ClusterConfig config = load_config(config_file_path);
 	NodeInfo self_info(config);
-	NodeInfo *leader = nullptr;
 
-	Network::get().start(config.host, config.port);
+	Network::shared().set_address(config.host, config.port);
+
+	std::optional<NodeInfo> leader; // = ClusterService::get().find_leader();
+	if (!leader) {
+		self_info.role = NodeRole::Leader;
+	}
 
 	for (auto ip_addr : config.seed_nodes) {
 		// Say hi and ask for other peers and their info
@@ -20,7 +24,7 @@ int main(int argc, char *argv[]) {
 		NodeInfo peer; // = something
 		peers.emplace(peer.node_id, peer);
 		// if node is leader {
-		leader = &peer;
+		leader = peer;
 		// }
 	}
 

@@ -1,6 +1,5 @@
 #ifndef PACKET_HPP
 #define PACKET_HPP
-
 #include <span>
 #include <type_traits>
 #include <vector>
@@ -37,6 +36,15 @@ class PacketReader {
 		offset += sizeof(T);
 		return value;
 	};
+
+	std::vector<std::byte> read_bytes(size_t n) {
+		if (offset + n > data.size()) {
+			throw std::out_of_range("PacketReader::read_bytes: buffer underrun");
+		}
+		std::vector<std::byte> out(data.begin() + offset, data.begin() + offset + n);
+		offset += n;
+		return out;
+	}
 
   private:
 	std::span<const std::byte> data;

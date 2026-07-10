@@ -2,24 +2,25 @@
 #define EVENT_HPP
 #include "network/Message.hpp"
 #include <functional>
-#include <type_traits>
-
-template <typename T>
-concept TriviallyCopyable = std::is_trivially_copyable_v<T>;
+#include "Packet.hpp"
+#include "IEvent.hpp"
 
 template <TriviallyCopyable T>
-class Event {
+class Event : public IEvent {
   public:
-	Event();
+	// Call callbacks on THIS MACHINE
+	void fire(const MessageHeader &header, const T &value) override {
+		for (const auto &callback : connections) {
+			callback(header, value);
+		}
+	}
 
-	bool fire(const T &value /*, address*/) {
-	}
-	bool broadcast(const T &value) {
-	}
-	void connect(std::function<void(const T &)>) {
+	void connect(std::function<void(const MessageHeader &header, const T &)> callback) {
+		connections.push_back(std::move(callback));
 	}
 
   private:
+	std::vector<std::function<void(const MessageHeader &header, const T &)>> connections;
 };
 
 #endif

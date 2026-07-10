@@ -4,7 +4,7 @@
 template <typename T>
 class Singleton {
   public:
-	static T &get() {
+	static T &shared() {
 		static T instance;
 		return instance;
 	}

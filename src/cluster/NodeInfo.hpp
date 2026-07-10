@@ -4,10 +4,16 @@
 #include <string>
 #include <chrono>
 
+enum class NodeRole {
+	Leader,
+	Follower,
+};
+
 struct NodeInfo {
 	std::string node_id;
 	std::string ip_address;
 	unsigned int port;
+	NodeRole role = NodeRole::Follower;
 
 	std::chrono::time_point<std::chrono::system_clock> last_heartbeat;
 	// NodeStatus status
