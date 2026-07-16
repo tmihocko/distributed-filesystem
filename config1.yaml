@@ -4,6 +4,10 @@ node:
   port: 8000
 
 seed_nodes:
-  - ip: "127.0.0.1"
+  - node_id: "node_b"
+    ip: "127.0.0.1"
     port: 8001
+  - node_id: "node_c"
+    ip: "127.0.0.1"
+    port: 8002
     
