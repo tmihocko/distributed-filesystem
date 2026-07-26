@@ -1,6 +1,6 @@
 #ifndef PEERSTATUS_HPP
 #define PEERSTATUS_HPP
-#include "NodeConfig.hpp"
+#include "Node.hpp"
 #include <optional>
 
 // Request sent to ask a peer for its current Raft state.

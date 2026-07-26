@@ -1,4 +1,4 @@
-#include "NodeConfig.hpp"
+#include "Message.hpp"
 #include "Network.hpp"
 #include <asio.hpp>
 #include <chrono>
@@ -11,27 +11,37 @@ int main(int argc, char *argv[]) {
 
 	Network &network = Network::get();
 	network.find_peers(config_file);
+	network.accept_peers();
 
 	auto last_heartbeat = std::chrono::steady_clock::now();
 
 	network.set_heartbeat_timer(&last_heartbeat, TIMEOUT);
-	while (network.listening()) {
-		auto msg = network.receive_with_timeout();
+	network.run();
 
-		switch (msg.header.type) {
+	while (network.listening()) {
+		std::optional<Message> msg = network.receive_with_timeout();
+
+		if (!msg) {
+			// leader missing, re-elect protocol
+		}
+
+		switch (msg->header.type) {
 		case MessageType::HEARTBEAT: {
 			last_heartbeat = std::chrono::steady_clock::now();
 			Message message; // = acknowledge
-			network.send_leader(message);
+			network.send_to_leader(message);
 			break;
 		}
-		case MessageType::TIMEOUT:
-			// elect leader
+		case MessageType::PEER_REQUEST:
+		case MessageType::PEER_STATUS_RESPONSE:
+			// do_something(msg)
 			break;
 		case MessageType::EMPTY:
 			break;
 		case MessageType::SHUTDOWN:
 			network.shutdown();
+			break;
+		default:
 			break;
 		}
 	}

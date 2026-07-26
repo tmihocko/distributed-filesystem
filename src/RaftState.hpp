@@ -1,6 +1,6 @@
 #ifndef RAFTSTATE_HPP
 #define RAFTSTATE_HPP
-#include "NodeConfig.hpp"
+#include "Node.hpp"
 #include "util/Singleton.hpp"
 #include <optional>
 

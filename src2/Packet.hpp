@@ -31,7 +31,8 @@ class PacketWriter {
 		return *this;
 	}
 
-	std::span<const std::byte> data() const;
+	std::vector<std::byte> &data();
+	std::uint32_t length() const;
 
   private:
 	std::vector<std::byte> buffer_;

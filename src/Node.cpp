@@ -1,4 +1,4 @@
-#include "NodeConfig.hpp"
+#include "Node.hpp"
 #include "yaml-cpp/exceptions.h"
 #include <iostream>
 #include <yaml-cpp/yaml.h>
