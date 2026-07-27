@@ -1,8 +1,25 @@
 #include "Packet.hpp"
+#include <cstddef>
 #include <span>
+#include <stdexcept>
 
-std::span<const std::byte> PacketWriter::data() const {
+std::span<std::byte> PacketWriter::data() {
+	assert_valid();
 	return buffer_;
+}
+
+std::vector<std::byte> PacketWriter::move_data() {
+	assert_valid();
+	valid_ = false;
+	return std::move(buffer_);
+}
+
+std::uint32_t PacketWriter::length() const {
+	return static_cast<std::uint32_t>(buffer_.size());
+}
+
+void PacketWriter::assert_valid() const {
+	if (!valid_) throw std::logic_error("Writer has been consumed.");
 }
 
 std::vector<std::byte> PacketReader::read_bytes(std::size_t n) {

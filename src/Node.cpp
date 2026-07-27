@@ -8,15 +8,15 @@ std::string Endpoint::key() const {
 	return host + ":" + std::to_string(port);
 }
 
-NodeInfo get_node_info(const std::string &filename) {
-	NodeInfo info;
+Endpoint Node::get_node_info(const std::string &filename) {
+	Endpoint info;
 
 	try {
 		YAML::Node yaml = YAML::LoadFile(filename);
 
-		info.endpoint.node_id = yaml["node"]["node_id"].as<std::string>();
-		info.endpoint.host = yaml["node"]["host"].as<std::string>();
-		info.endpoint.port = yaml["node"]["port"].as<std::uint16_t>();
+		info.node_id = yaml["node"]["node_id"].as<std::string>();
+		info.host = yaml["node"]["host"].as<std::string>();
+		info.port = yaml["node"]["port"].as<std::uint16_t>();
 
 	} catch (const YAML::Exception &e) {
 		std::cerr << "YAML error: " << e.what() << "\n";
@@ -25,8 +25,8 @@ NodeInfo get_node_info(const std::string &filename) {
 	return info;
 } // namespace get_node_info(conststd::string
 
-std::vector<NodeInfo> get_seed_nodes(const std::string &filename) {
-	std::vector<NodeInfo> nodes;
+std::vector<Endpoint> Node::get_seed_nodes(const std::string &filename) {
+	std::vector<Endpoint> nodes;
 
 	try {
 		YAML::Node yaml = YAML::LoadFile(filename);
@@ -36,7 +36,7 @@ std::vector<NodeInfo> get_seed_nodes(const std::string &filename) {
 			auto host = item["host"].as<std::string>();
 			auto port = item["port"].as<std::uint16_t>();
 
-			nodes.emplace_back(Endpoint{ node_id, host, port }, NodeRole::FOLLOWER);
+			nodes.emplace_back(Endpoint{ node_id, host, port });
 		}
 	} catch (const YAML::Exception &e) {
 		std::cerr << "YAML error: " << e.what() << "\n";

@@ -13,28 +13,45 @@ class PacketWriter {
   public:
 	template <PacketWritable T>
 	PacketWriter &write(const T &value) {
+		assert_valid();
 		auto old = buffer_.size();
-		buffer_.resize(old + sizeof(T));
 
+		buffer_.resize(old + sizeof(T));
 		std::memcpy(buffer_.data() + old, &value, sizeof(T));
+
 		return *this;
 	}
 
 	// Writes until null terminator
 	// Includes null terminator in message, maybe remove that later, will see
 	PacketWriter &write_string(const std::string &value) {
+		assert_valid();
 		const std::size_t byte_count = value.size() + 1;
 		const std::size_t old = buffer_.size();
 
 		buffer_.resize(old + byte_count);
 		std::memcpy(buffer_.data() + old, value.c_str(), byte_count);
+
 		return *this;
 	}
 
-	std::span<const std::byte> data() const;
+	PacketWriter &write_bytes(std::span<std::byte> bytes) {
+		assert_valid();
+
+		buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
+
+		return *this;
+	}
+
+	[[nodiscard]] std::vector<std::byte> move_data();
+	std::span<std::byte> data();
+	std::uint32_t length() const;
 
   private:
+	void assert_valid() const;
+
 	std::vector<std::byte> buffer_;
+	bool valid_ = true;
 };
 
 class PacketReader {
@@ -43,6 +60,10 @@ class PacketReader {
 
 	template <PacketWritable T>
 	T read() {
+		if (offset_ > data_.size() || sizeof(T) > data_.size() - offset_) {
+			throw std::out_of_range("PacketReader buffer underrun");
+		}
+
 		T value;
 		std::memcpy(&value, data_.data() + offset_, sizeof(T));
 		offset_ += sizeof(T);

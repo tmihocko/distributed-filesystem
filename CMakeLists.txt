@@ -50,4 +50,9 @@ else()
     message(FATAL_ERROR "yaml-cpp target not found")
 endif()
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE ASIO_STANDALONE)
+target_compile_definitions(
+	${PROJECT_NAME} 
+	PRIVATE 
+	ASIO_STANDALONE
+	ASIO_NO_DEPRECATED
+)

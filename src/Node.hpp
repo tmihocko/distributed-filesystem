@@ -5,13 +5,6 @@
 #include <vector>
 
 using NodeId = std::string;
-using Term = std::uint64_t;
-
-enum class NodeRole : std::uint8_t {
-	FOLLOWER = 0,
-	LEADER = 1,
-
-};
 
 struct Endpoint {
 	NodeId node_id;
@@ -22,13 +15,11 @@ struct Endpoint {
 	std::string key() const;
 };
 
-struct NodeInfo {
-	Endpoint endpoint;
-	NodeRole role;
-};
+namespace Node {
 
-NodeInfo get_node_info(const std::string &filename);
+Endpoint get_node_info(const std::string &filename);
+std::vector<Endpoint> get_seed_nodes(const std::string &filename);
 
-std::vector<NodeInfo> get_seed_nodes(const std::string &filename);
+} // namespace Node
 
 #endif // NODECONFIG_HPP

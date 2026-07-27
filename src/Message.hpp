@@ -1,5 +1,6 @@
 #ifndef MESSAGE_HPP
 #define MESSAGE_HPP
+#include "Node.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -9,8 +10,8 @@ constexpr inline std::uint32_t MAX_MESSAGE_SIZE = 1024 * 1024;
 
 enum class MessageType : std::uint8_t {
 	HEARTBEAT = 0,
-	PEER_REQUEST = 1,
-	PEER_STATUS_RESPONSE = 2,
+	HELLO = 1,
+	wal = 2,
 	TIMEOUT = 253,
 	EMPTY = 254,
 	SHUTDOWN = 255,
@@ -19,6 +20,7 @@ enum class MessageType : std::uint8_t {
 struct __attribute__((packed)) MessageHeader {
 	std::uint8_t magic;
 	std::uint32_t length;
+
 	MessageType type;
 };
 
@@ -29,14 +31,15 @@ constexpr inline std::size_t MESSAGE_HEADER_SIZE =
 
 static_assert(sizeof(MessageHeader) == MESSAGE_HEADER_SIZE);
 
-struct Message {
+struct Frame {
 	MessageHeader header;
 	std::vector<std::byte> buffer;
 };
 
-struct ReceivedMessage {
-	std::string socket_id;
-	Message messgae;
+struct Message {
+	NodeId sender;
+	MessageHeader header;
+	std::vector<std::byte> buffer;
 };
 
 #endif // MESSAGE_HPP

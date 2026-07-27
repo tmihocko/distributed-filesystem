@@ -1,46 +1,65 @@
 #include "Network.hpp"
 #include "Message.hpp"
 #include "Packet.hpp"
-#include "RaftState.hpp"
+#include "asio/connect.hpp"
+#include "asio/error.hpp"
 #include "asio/error_code.hpp"
 #include "asio/ip/tcp.hpp"
 #include <array>
 #include <asio.hpp>
 #include <cassert>
-#include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
-#include <thread>
 
-void Network::set_heartbeat_timer(std::chrono::steady_clock::time_point *last_time, std::chrono::milliseconds timeout) {
-	last_heartbeat_ = last_time;
-	timeout_ = timeout;
-}
+// This is where node_id and connection are "strongly binded"
+void Network::start_reading(NodeId node_id, std::shared_ptr<Connection> connection) {
+	async_read_frame(
+		connection->socket,
+		[this, node_id = std::move(node_id), connection = std::move(connection)](asio::error_code error, std::optional<Frame> msg) {
+			if (error || !msg) {
+				connection->socket.close();
 
-void Network::start_reading(asio::ip::tcp::socket &socket) {
-	async_read_frame(socket, [this, &socket](asio::error_code error, std::optional<Message> msg) {
-		if (error || !msg) {
-			socket.close();
-			return;
-		}
+				auto it = connections_.find(node_id);
+				if (it != connections_.end() &&
+					it->second == connection) {
+					connections_.erase(it);
+				}
+				return;
+			}
 
-		message_queue_.push(std::move({ socket., *msg }));
+			message_queue_.push(Message{
+				node_id,
+				msg->header,
+				std::move(msg->buffer),
+			});
 
-		if (status_ == NetworkStatus::ACTIVE) {
-			start_reading(socket);
-		}
-	});
+			if (status_ == NetworkStatus::ACTIVE) {
+				start_reading(node_id, connection);
+			}
+		});
 }
 
 void Network::run() {
 	if (status_ == NetworkStatus::ACTIVE) return;
 	// Read messages and put into message queue
 
+	using asio::ip::tcp;
+
+	tcp::endpoint local{ asio::ip::make_address(self_.host), self_.port };
+
+	acceptor_.open(local.protocol());
+	acceptor_.set_option(tcp::acceptor::reuse_address(true));
+	acceptor_.bind(local);
+	acceptor_.listen();
+
 	status_ = NetworkStatus::ACTIVE;
-	for (auto &[_, socket] : connections_) {
-		start_reading(socket);
+	accept_peers();
+
+	for (auto &[id, connection] : connections_) {
+		start_reading(id, connection);
 	}
 	network_thread_ = std::jthread{
 		[this]() {
@@ -50,21 +69,16 @@ void Network::run() {
 }
 
 void Network::accept_peers() {
-	acceptor_.async_accept([this](const asio::error_code &ec, asio::ip::tcp::socket socket) {
-		if (ec) {
-			accept_peers();
-			return;
+	acceptor_.async_accept([this](const asio::error_code &error, asio::ip::tcp::socket socket) {
+		if (!error) {
+			auto connection = std::make_shared<Connection>(std::move(socket), false);
+
+			pending_connections_.insert(connection);
+
+			send_hello(connection);
+			read_hello(connection);
 		}
-		if (status_ == NetworkStatus::ACTIVE) {
-			const auto remote = socket.remote_endpoint();
-
-			const auto key = remote.address().to_string() + ":" + std::to_string(remote.port());
-
-			auto [it, inserted] = connections_.try_emplace(key, std::move(socket));
-			if (inserted) {
-				start_reading(it->second);
-			}
-
+		if (status_ == NetworkStatus::ACTIVE && error != asio::error::operation_aborted) {
 			accept_peers();
 		}
 	});
@@ -72,125 +86,84 @@ void Network::accept_peers() {
 
 void Network::find_peers(const std::string &config_file) {
 	assert(status_ == NetworkStatus::HANDSHAKING);
-	self_ = get_node_info(config_file);
-	std::vector<NodeInfo> seed_nodes = get_seed_nodes(config_file);
+	self_ = Node::get_node_info(config_file);
+	std::vector<Endpoint> seed_nodes = Node::get_seed_nodes(config_file);
 
 	peers_.clear();
 
-	std::optional<NodeInfo> found_leader;
-	Term highest_term = RaftState::get().current_term();
+	for (const auto &peer : seed_nodes) {
+		const NodeId id = peer.node_id;
+		if (id.empty() || id == self_.node_id) continue;
 
-	for (const auto &node : seed_nodes) {
-		if (node.endpoint.node_id == self_.endpoint.node_id) continue;
-
-		std::optional<PeerStatus> status = request_peer_status(node.endpoint);
-
-		if (!status) continue;									// Peer didn't respond, probably offline
-		if (status->node_id != node.endpoint.node_id) continue; // Expected different node
-
-		if (status->term > highest_term) {
-			highest_term = status->term;
-			found_leader.reset();
-		}
-
-		std::optional<NodeId> claimed_leader;
-
-		if (status->role == NodeRole::LEADER) {
-			claimed_leader.emplace(status->node_id);
-		} else if (status->leader_id) {
-			claimed_leader.emplace(*status->leader_id);
-		}
-
-		if (!claimed_leader) continue;
-		if (!found_leader) {
-			found_leader.emplace(peers_.at(*claimed_leader));
-		} else if (found_leader->endpoint.node_id != *claimed_leader) {
-			found_leader.reset();
-		}
-	}
-	if (highest_term > RaftState::get().current_term()) {
-		RaftState::get().observe_higher_term(highest_term);
-	}
-
-	if (found_leader) {
-		leader_ = *found_leader;
-	} else {
-		leader_.reset();
+		peers_.insert_or_assign(id, peer);
+		connect_to_peer(peer);
 	}
 }
 
-std::optional<PeerStatus> Network::request_peer_status(const Endpoint &endpoint) {
-	assert(status_ == NetworkStatus::HANDSHAKING);
+void Network::schedule_reconnect(const Endpoint &peer) {}
+
+void Network::register_connection(std::shared_ptr<Connection> connection, Endpoint peer) {
+	const NodeId id = peer.node_id;
+	if ((id.empty() || id == self_.node_id) ||
+		(connection->expected_peer_id && *connection->expected_peer_id != id)) {
+
+		close_pending(connection);
+		return;
+	}
+
+	connection->peer_id = id;
+	peers_.insert_or_assign(id, std::move(peer));
+
+	auto [it, inserted] = connections_.try_emplace(id, connection);
+
+	if (!inserted) {
+		close_pending(connection);
+		return;
+	}
+	pending_connections_.erase(connection);
+
+	std::cout << self_.node_id << "\t<-->\t" << id << std::endl;
+	start_reading(id, std::move(connection));
+}
+
+void Network::connect_to_peer(const Endpoint &peer) {
 	using asio::ip::tcp;
 
-	try {
-		auto [it, inserted] = connections_.try_emplace(endpoint.key(), context_);
+	auto resolver = std::make_shared<tcp::resolver>(context_);
+	auto connection = std::make_shared<Connection>(context_, true);
 
-		tcp::socket &socket = it->second;
-		tcp::resolver resolver{ context_ };
+	connection->expected_peer_id = peer.node_id;
+	pending_connections_.insert(connection);
 
-		const std::string port = std::to_string(endpoint.port);
-		const auto address = resolver.resolve(endpoint.host, port);
+	resolver->async_resolve(
+		peer.host,
+		std::to_string(peer.port),
+		[this, peer, connection, resolver](const asio::error_code &error, tcp::resolver::results_type results) {
+			if (error) {
+				pending_connections_.erase(connection);
+				schedule_reconnect(peer);
+				return;
+			}
 
-		if (inserted) {
-			asio::connect(socket, address);
-		}
+			asio::async_connect(
+				connection->socket,
+				results,
+				[this, peer, connection](const asio::error_code &error, const tcp::endpoint &) {
+					if (error) {
+						pending_connections_.erase(connection);
+						schedule_reconnect(peer);
+						return;
+					}
 
-		PeerStatusRequest request{
-			self_.endpoint.node_id,
-			RaftState::get().current_term()
-		};
+					connection->peer_id = peer.node_id;
 
-		PacketWriter payload_writer;
-
-		payload_writer
-			.write_string(request.requester_id)
-			.write<Term>(request.requester_term);
-
-		const auto &payload = payload_writer.data();
-
-		if (payload.size() > MAX_MESSAGE_SIZE) {
-			throw std::runtime_error("Message exceeds maximum size");
-		}
-
-		// Need second because we string is dynamically sized, write payload then header
-		PacketWriter message_writer;
-
-		message_writer
-			.write<std::uint8_t>(HEADER_MAGIC)
-			.write<std::uint32_t>(payload.size())
-			.write<MessageType>(MessageType::PEER_REQUEST);
-
-		for (const auto &byte : payload) {
-			message_writer.write<std::byte>(byte);
-		}
-
-		asio::write(socket, asio::buffer(message_writer.data()));
-
-		Message response = read_frame(socket);
-
-		if (response.header.type != MessageType::PEER_STATUS_RESPONSE) return std::nullopt;
-
-		PacketReader reader(response.buffer);
-
-		const auto peer_id = reader.read_string();
-		const auto peer_term = reader.read<Term>();
-		const auto peer_role = reader.read<NodeRole>();
-		const auto leader_id = reader.read_string();
-
-		const PeerStatus status{ peer_id, peer_term, peer_role, leader_id };
-
-		// Confirm that the endpoint belongs to the expected node.
-		if (status.node_id != endpoint.node_id) return std::nullopt;
-
-		return status;
-	} catch (const std::exception &) {
-		// Resolution, connection, I/O, or parsing failed.
-		return std::nullopt;
-	}
+					send_hello(connection);
+					read_hello(connection);
+				});
+		});
 }
 
-Message Network::read_frame(asio::ip::tcp::socket &socket) {
+Frame Network::read_frame(asio::ip::tcp::socket &socket) {
 	std::array<std::byte, MESSAGE_HEADER_SIZE> header_bytes;
 
 	asio::read(socket, asio::buffer(header_bytes));
@@ -212,7 +185,7 @@ Message Network::read_frame(asio::ip::tcp::socket &socket) {
 
 	MessageHeader header = { magic, payload_size, message_type };
 
-	return Message{
+	return Frame{
 		header,
 		std::move(payload)
 	};
@@ -220,7 +193,7 @@ Message Network::read_frame(asio::ip::tcp::socket &socket) {
 
 void Network::async_read_frame(
 	asio::ip::tcp::socket &socket,
-	std::function<void(asio::error_code, std::optional<Message>)> handler) {
+	std::function<void(asio::error_code, std::optional<Frame>)> handler) {
 	// stuff
 	struct ReadState {
 		std::array<std::byte, MESSAGE_HEADER_SIZE> header_bytes{};
@@ -259,7 +232,10 @@ void Network::async_read_frame(
 						 state->payload.resize(state->header.length);
 
 						 if (state->payload.empty()) {
-							 handler({}, Message{ state->header, std::move(state->payload) });
+							 handler({},
+									 Frame{
+										 state->header,
+										 std::move(state->payload) });
 							 return;
 						 }
 
@@ -270,32 +246,114 @@ void Network::async_read_frame(
 								 return;
 							 }
 
-							 handler(
-								 {},
-								 Message{ state->header, std::move(state->payload) });
+							 handler({},
+									 Frame{
+										 state->header,
+										 std::move(state->payload) });
 						 });
 					 });
 }
 
-std::optional<Message> Network::receive_with_timeout() {
-	return message_queue_.pop(timeout_);
-}
+void Network::async_send_frame(std::shared_ptr<Connection> connection, Frame frame) {
+	if (frame.buffer.size() > MAX_MESSAGE_SIZE) {
+		close_pending(connection);
+		return;
+	}
 
-std::size_t Network::send(const Endpoint &endpoint, const Message &msg) {
-}
+	PacketWriter writer;
 
-std::size_t Network::send_to_leader(const Message &msg) {
-	return send(leader_.value().endpoint, msg);
+	writer.write(frame.header);
+	writer.write_bytes(frame.buffer);
+
+	auto bytes = std::make_shared<std::vector<std::byte>>(writer.move_data());
+
+	asio::async_write(
+		connection->socket,
+		asio::buffer(*bytes),
+		// Capture bytes for lifetime
+		[this, connection, bytes](const asio::error_code &error, std::size_t written) {
+			if (!error) return;
+
+			if (connection->peer_id) {
+				auto it = connections_.find(*connection->peer_id);
+
+				if (it != connections_.end() && it->second == connection) {
+					connections_.erase(it);
+				}
+			}
+			close_pending(connection);
+		});
 }
 
 void Network::shutdown() {
-	status_ = NetworkStatus::OFF;
 }
 
-bool Network::listening() {
-	return status_ == NetworkStatus::ACTIVE;
+std::optional<Message> Network::receive_with_timeout() {
+	return message_queue_.pop(std::chrono::milliseconds{ 500 });
 }
 
-std::optional<NodeInfo> Network::leader() {
-	return leader_;
+void Network::send_hello(std::shared_ptr<Connection> connection) {
+	PacketWriter writer;
+
+	writer
+		.write_string(self_.node_id)
+		.write_string(self_.host)
+		.write<std::uint16_t>(self_.port);
+
+	Frame frame{
+		MessageHeader{
+			HEADER_MAGIC,
+			writer.length(),
+			MessageType::HELLO },
+		writer.move_data()
+	};
+
+	async_send_frame(connection, std::move(frame));
+}
+
+void Network::read_hello(std::shared_ptr<Connection> connection) {
+	async_read_frame(
+		connection->socket,
+		[this, connection](
+			asio::error_code error,
+			std::optional<Frame> frame) {
+			if (error || !frame ||
+				frame->header.type != MessageType::HELLO) {
+				close_pending(connection);
+				return;
+			}
+
+			try {
+				PacketReader reader{ frame->buffer };
+
+				Endpoint peer = {
+					.node_id = reader.read_string(),
+					.host = reader.read_string(),
+					.port = reader.read<std::uint16_t>()
+				};
+
+				register_connection(connection, std::move(peer));
+			} catch (...) {
+				close_pending(connection);
+			}
+		});
+}
+void Network::close_pending(const std::shared_ptr<Connection> &connection) {
+	pending_connections_.erase(connection);
+
+	if (!connection->socket.is_open()) return;
+
+	asio::error_code shutdown_error;
+	connection->socket.shutdown(asio::ip::tcp::socket::shutdown_both, shutdown_error);
+
+	if (shutdown_error && shutdown_error != asio::error::not_connected) {
+		// Log shutdown_result.message() if desired.
+	}
+
+	asio::error_code close_error;
+	connection->socket.close(close_error);
+
+	if (close_error) {
+		// Log close_error.message().
+	}
 }
