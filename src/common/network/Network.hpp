@@ -2,8 +2,8 @@
 #define NETWORK_HPP
 #include "Message.hpp"
 #include "asio/ip/tcp.hpp"
-#include "util/Singleton.hpp"
-#include "util/BlockingQueue.hpp"
+#include "../util/Singleton.hpp"
+#include "../util/BlockingQueue.hpp"
 #include <asio.hpp>
 #include <memory>
 #include <thread>
@@ -30,7 +30,7 @@ struct Connection {
 	bool outgoing;
 };
 
-class Network : public Singleton<Network> {
+class Network final : public Singleton<Network> {
   public:
 	void run();
 
@@ -40,11 +40,6 @@ class Network : public Singleton<Network> {
 	void accept_peers();
 	void find_peers(const std::string &config_file);
 	void connect_to_peer(const Endpoint &peer);
-
-	Frame read_frame(asio::ip::tcp::socket &socket);
-	void async_read_frame(
-		asio::ip::tcp::socket &socket,
-		std::function<void(std::error_code, std::optional<Frame>)> handler);
 
 	void async_send_frame(std::shared_ptr<Connection> connection, Frame frame);
 

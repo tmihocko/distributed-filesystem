@@ -3,7 +3,7 @@
 #include <span>
 #include <stdexcept>
 
-std::span<std::byte> PacketWriter::data() {
+std::span<const std::byte> PacketWriter::data() {
 	assert_valid();
 	return buffer_;
 }
@@ -29,4 +29,8 @@ std::vector<std::byte> PacketReader::read_bytes(std::size_t n) {
 	std::vector<std::byte> out(data_.begin() + offset_, data_.begin() + offset_ + n);
 	offset_ += n;
 	return out;
+}
+
+bool PacketReader::at_end() const noexcept {
+	return offset_ == data_.size();
 }

@@ -35,7 +35,7 @@ class PacketWriter {
 		return *this;
 	}
 
-	PacketWriter &write_bytes(std::span<std::byte> bytes) {
+	PacketWriter &write_bytes(std::span<const std::byte> bytes) {
 		assert_valid();
 
 		buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
@@ -44,7 +44,7 @@ class PacketWriter {
 	}
 
 	[[nodiscard]] std::vector<std::byte> move_data();
-	std::span<std::byte> data();
+	std::span<const std::byte> data();
 	std::uint32_t length() const;
 
   private:
@@ -70,6 +70,12 @@ class PacketReader {
 		return value;
 	};
 
+	template <PacketWritable... Ts>
+		requires(sizeof...(Ts) > 1)
+	std::tuple<Ts...> read() {
+		return std::tuple<Ts...>{ read<Ts>()... };
+	}
+
 	std::string read_string() {
 		const auto begin = data_.begin() + offset_;
 		const auto null_terminator = std::find(begin, data_.end(), std::byte{ 0 });
@@ -86,6 +92,8 @@ class PacketReader {
 
 		return value;
 	}
+
+	bool at_end() const noexcept;
 
 	std::vector<std::byte> read_bytes(std::size_t n);
 

@@ -11,7 +11,8 @@ constexpr inline std::uint32_t MAX_MESSAGE_SIZE = 1024 * 1024;
 enum class MessageType : std::uint8_t {
 	HEARTBEAT = 0,
 	HELLO = 1,
-	wal = 2,
+	CLIENT_REQUEST = 100,
+	CLIENT_RESPONSE = 101,
 	TIMEOUT = 253,
 	EMPTY = 254,
 	SHUTDOWN = 255,

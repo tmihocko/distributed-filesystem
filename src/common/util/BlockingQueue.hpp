@@ -8,7 +8,7 @@
 #include <queue>
 
 template <typename T>
-class BlockingQueue : private std::deque<T> {
+class BlockingQueue {
   public:
 	void push(T item) {
 		{
@@ -18,7 +18,8 @@ class BlockingQueue : private std::deque<T> {
 		cv_.notify_one();
 	}
 
-	std::optional<T> pop(std::chrono::duration<double, std::ratio<1, 1000>> timeout) {
+	template <typename Rep, typename Period>
+	std::optional<T> pop(std::chrono::duration<Rep, Period> timeout) {
 		std::unique_lock<std::mutex> lock(mutex_);
 
 		const bool avaiable = cv_.wait_for(lock, timeout, [this]() {
@@ -29,6 +30,7 @@ class BlockingQueue : private std::deque<T> {
 
 		T item = std::move(queue_.front());
 		queue_.pop();
+
 		return item;
 	}
 

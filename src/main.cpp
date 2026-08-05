@@ -1,14 +1,14 @@
-#include "Network.hpp"
+#include "shared/network/Network.hpp"
 #include <asio.hpp>
 #include <chrono>
-
-std::chrono::milliseconds TIMEOUT;
 
 int main(int argc, char *argv[]) {
 	assert(argc == 2);
 	std::string config_file = argv[1];
 
 	Network &network = Network::get();
+	// Raft &raft = Raft::get();
+
 	network.find_peers(config_file);
 
 	auto last_heartbeat = std::chrono::steady_clock::now();

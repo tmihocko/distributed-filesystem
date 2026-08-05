@@ -5,18 +5,17 @@
 #include "asio/error.hpp"
 #include "asio/error_code.hpp"
 #include "asio/ip/tcp.hpp"
-#include <array>
+#include "network/FrameIO.hpp"
 #include <asio.hpp>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 
 // This is where node_id and connection are "strongly binded"
 void Network::start_reading(NodeId node_id, std::shared_ptr<Connection> connection) {
-	async_read_frame(
+	FrameIO::async_read_frame(
 		connection->socket,
 		[this, node_id = std::move(node_id), connection = std::move(connection)](asio::error_code error, std::optional<Frame> msg) {
 			if (error || !msg) {
@@ -31,9 +30,9 @@ void Network::start_reading(NodeId node_id, std::shared_ptr<Connection> connecti
 			}
 
 			message_queue_.push(Message{
-				node_id,
-				msg->header,
-				std::move(msg->buffer),
+				.sender = node_id,
+				.header = msg->header,
+				.buffer = std::move(msg->buffer),
 			});
 
 			if (status_ == NetworkStatus::ACTIVE) {
@@ -163,126 +162,20 @@ void Network::connect_to_peer(const Endpoint &peer) {
 		});
 }
 
-Frame Network::read_frame(asio::ip::tcp::socket &socket) {
-	std::array<std::byte, MESSAGE_HEADER_SIZE> header_bytes;
-
-	asio::read(socket, asio::buffer(header_bytes));
-
-	PacketReader reader(header_bytes);
-
-	const auto magic = reader.read<std::uint8_t>();
-	const auto payload_size = reader.read<std::uint32_t>();
-	const auto message_type = reader.read<MessageType>();
-
-	if (magic != HEADER_MAGIC) throw std::runtime_error("Wrong magic!");
-	if (payload_size > MAX_MESSAGE_SIZE) throw std::runtime_error("Message exceeds maximum size");
-
-	std::vector<std::byte> payload(payload_size);
-
-	if (payload_size != 0) {
-		asio::read(socket, asio::buffer(payload));
-	}
-
-	MessageHeader header = { magic, payload_size, message_type };
-
-	return Frame{
-		header,
-		std::move(payload)
-	};
-}
-
-void Network::async_read_frame(
-	asio::ip::tcp::socket &socket,
-	std::function<void(asio::error_code, std::optional<Frame>)> handler) {
-	// stuff
-	struct ReadState {
-		std::array<std::byte, MESSAGE_HEADER_SIZE> header_bytes{};
-		MessageHeader header{};
-		std::vector<std::byte> payload;
-	};
-
-	// Keep memory alive in asio's async world
-	auto state = std::make_shared<ReadState>();
-
-	// Header first,
-	asio::async_read(socket,
-					 asio::buffer(state->header_bytes),
-					 [&socket, state, handler = std::move(handler)](
-						 const asio::error_code &error,
-						 std::size_t) mutable {
-						 if (error) {
-							 handler(error, std::nullopt);
-							 return;
-						 }
-						 try {
-							 PacketReader reader(state->header_bytes);
-
-							 state->header.magic = reader.read<std::uint8_t>();
-							 state->header.length = reader.read<std::uint32_t>();
-							 state->header.type = reader.read<MessageType>();
-
-							 if (state->header.magic != HEADER_MAGIC) throw std::runtime_error("Wrong magic");
-							 if (state->header.length > MAX_MESSAGE_SIZE) throw std::runtime_error("Message exceeds maximum size");
-						 } catch (...) {
-							 handler(
-								 std::make_error_code(std::errc::protocol_error),
-								 std::nullopt);
-							 return;
-						 }
-						 state->payload.resize(state->header.length);
-
-						 if (state->payload.empty()) {
-							 handler({},
-									 Frame{
-										 state->header,
-										 std::move(state->payload) });
-							 return;
-						 }
-
-						 // Then actual message
-						 asio::async_read(socket, asio::buffer(state->payload), [state, handler = std::move(handler)](const asio::error_code &error, std::size_t) mutable {
-							 if (error) {
-								 handler(error, std::nullopt);
-								 return;
-							 }
-
-							 handler({},
-									 Frame{
-										 state->header,
-										 std::move(state->payload) });
-						 });
-					 });
-}
-
 void Network::async_send_frame(std::shared_ptr<Connection> connection, Frame frame) {
-	if (frame.buffer.size() > MAX_MESSAGE_SIZE) {
-		close_pending(connection);
-		return;
-	}
 
-	PacketWriter writer;
+	FrameIO::async_write_frame(connection->socket, std::move(frame), [this, connection](const asio::error_code &error, std::size_t) {
+		if (!error) return;
 
-	writer.write(frame.header);
-	writer.write_bytes(frame.buffer);
+		if (connection->peer_id) {
+			auto it = connections_.find(*connection->peer_id);
 
-	auto bytes = std::make_shared<std::vector<std::byte>>(writer.move_data());
-
-	asio::async_write(
-		connection->socket,
-		asio::buffer(*bytes),
-		// Capture bytes for lifetime
-		[this, connection, bytes](const asio::error_code &error, std::size_t written) {
-			if (!error) return;
-
-			if (connection->peer_id) {
-				auto it = connections_.find(*connection->peer_id);
-
-				if (it != connections_.end() && it->second == connection) {
-					connections_.erase(it);
-				}
+			if (it != connections_.end() && it->second == connection) {
+				connections_.erase(it);
 			}
-			close_pending(connection);
-		});
+		}
+		close_pending(connection);
+	});
 }
 
 void Network::shutdown() {
@@ -312,13 +205,10 @@ void Network::send_hello(std::shared_ptr<Connection> connection) {
 }
 
 void Network::read_hello(std::shared_ptr<Connection> connection) {
-	async_read_frame(
+	FrameIO::async_read_frame(
 		connection->socket,
-		[this, connection](
-			asio::error_code error,
-			std::optional<Frame> frame) {
-			if (error || !frame ||
-				frame->header.type != MessageType::HELLO) {
+		[this, connection](asio::error_code error, std::optional<Frame> frame) {
+			if (error || !frame || frame->header.type != MessageType::HELLO) {
 				close_pending(connection);
 				return;
 			}
@@ -326,10 +216,10 @@ void Network::read_hello(std::shared_ptr<Connection> connection) {
 			try {
 				PacketReader reader{ frame->buffer };
 
-				Endpoint peer = {
+				Endpoint peer{
 					.node_id = reader.read_string(),
 					.host = reader.read_string(),
-					.port = reader.read<std::uint16_t>()
+					.port = reader.read<std::uint16_t>(),
 				};
 
 				register_connection(connection, std::move(peer));

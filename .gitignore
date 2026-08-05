@@ -1,10 +1,10 @@
 build/
+builds/
 .cache/
 .ccls-cache/
 .vscode/
 
 .DS_STORE
-
 
 # Prerequisites
 *.d
