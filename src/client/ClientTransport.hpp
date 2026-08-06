@@ -5,6 +5,7 @@
 #include "network/Node.hpp"
 #include "util/BlockingQueue.hpp"
 #include "util/Singleton.hpp"
+#include <atomic>
 #include <expected>
 #include <span>
 #include <system_error>
@@ -18,9 +19,11 @@ enum class TransportErrorCode {
 	NO_SEEDS,
 	NOT_CONNECTED,
 	CONNECT_FAILED,
-	NOT_IMPLEMENTED,
+	IO_ERROR,
+	TIMEOUT,
 	PROTOCOL_ERROR,
 	REDIRECT_LIMIT,
+	SHUTTING_DOWN,
 };
 
 struct TransportError {
@@ -29,14 +32,19 @@ struct TransportError {
 };
 
 struct ReadResult {
+	std::uint64_t operation_id;
 	std::error_code error;
 	std::optional<Frame> frame;
 };
 
 struct ConnectResult {
+	std::uint64_t operation_id;
 	std::error_code error;
 	Endpoint endpoint;
 };
+
+template <typename T>
+using TransportOperation = std::expected<T, TransportError>;
 
 class ClientTransport : public Singleton<ClientTransport> {
 
@@ -45,9 +53,9 @@ class ClientTransport : public Singleton<ClientTransport> {
   public:
 	~ClientTransport();
 
-	std::expected<void, TransportError> connect(std::span<const Endpoint> seed_nodes);
+	TransportOperation<void> connect(std::span<const Endpoint> seed_nodes);
 
-	std::expected<ClientProtocol::RpcResponse, TransportError> request(ClientProtocol::Operation operation, std::vector<std::byte> payload);
+	TransportOperation<ClientProtocol::RpcResponse> request(ClientProtocol::Operation operation, std::vector<std::byte> payload);
 
 	void shutdown();
 
@@ -61,20 +69,24 @@ class ClientTransport : public Singleton<ClientTransport> {
 	std::optional<Endpoint> current_leader_;
 	std::vector<Endpoint> seed_nodes_; // Other cluster nodes
 
+	std::optional<Endpoint> connected_endpoint_;
 	WorkGuard guard_{ asio::make_work_guard(context_) };
 	asio::ip::tcp::socket socket_{ context_ };
+	asio::ip::tcp::resolver resolver_{ context_ };
 	std::jthread io_thread_;
 
 	BlockingQueue<ReadResult> read_results_;
 	BlockingQueue<ConnectResult> connect_results_;
 
-	std::deque<std::shared_ptr<std::vector<std::byte>>> outgoing_writes_;
+	TransportOperation<void> connect_to(const Endpoint &endpoint);
+	void close_socket();
+	TransportOperation<void> discover_leader();
+	TransportOperation<ClientProtocol::RpcResponse> send_and_wait(const Endpoint &leader, const ClientProtocol::RpcRequest &request);
+	TransportOperation<Frame> perform_frame_round_trip(Frame outgoing);
 
-	std::expected<void, TransportError> discover_leader();
-	std::expected<ClientProtocol::RpcResponse, TransportError> send_and_wait(const Endpoint &leader, const ClientProtocol::RpcRequest &request);
-
+	std::uint64_t next_io_operation_id_{ 1 };
 	ClientProtocol::RequestId next_request_id_{ 1 };
-	bool shutting_down_ = false;
+	std::atomic_bool shutting_down_{ false };
 };
 
 #endif // CLIENTNETWORK_HPP

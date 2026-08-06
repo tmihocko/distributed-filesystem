@@ -1,47 +1,46 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
+#include "ClientTransport.hpp"
 #include "network/Node.hpp"
 #include "util/Singleton.hpp"
 #include <expected>
 #include <string>
+#include <vector>
 
 enum ClientError : std::uint8_t {
 	AlreadyExists,
 	ServerError,
+	NotImplemented,
 };
 
-struct FileInfo {};
-
-enum class Operation : std::uint8_t {
-	CREATE_FILE,
-	READ_FILE,
-	WRITE_FILE,
-	REMOVE,
-	LIST,
-	MKDIR,
-	RENAME,
-	STAT,
+struct FileInfo {
+	std::string path;
+	bool is_directory = false;
+	std::uint64_t size = 0;
 };
+
+template <typename T>
+using ClientOperation = std::expected<T, ClientError>;
 
 class Client final : public Singleton<Client> {
   public:
-	std::expected<void, ClientError> connect(const std::vector<Endpoint> &seed_nodes);
+	ClientOperation<void> connect(const std::vector<Endpoint> &seed_nodes);
 
-	std::expected<void, ClientError> create_file();
+	ClientOperation<void> create_file(std::string path);
 
-	std::expected<void, ClientError> read_file();
+	ClientOperation<std::vector<std::byte>> read_file(std::string path);
 
-	std::expected<void, ClientError> write_file();
+	ClientOperation<void> write_file(std::string path, std::span<const std::byte> contents);
 
-	std::expected<void, ClientError> list();
+	ClientOperation<void> remove(std::string path);
 
-	std::expected<void, ClientError> mkdir(std::string path);
+	ClientOperation<std::vector<FileInfo>> list(std::string path = "/");
 
-	std::expected<void, ClientError> rename();
+	ClientOperation<void> mkdir(std::string path);
 
-	std::expected<void, ClientError> stat();
+	ClientOperation<void> rename(std::string old_path, std::string new_path);
 
-	// other rpc calls
+	ClientOperation<FileInfo> stat(std::string path);
 
   private:
 	ClientTransport &transport_ = ClientTransport::get();
