@@ -80,7 +80,7 @@ class ClientTransport : public Singleton<ClientTransport> {
 
 	TransportOperation<void> connect_to(const Endpoint &endpoint);
 	void close_socket();
-	TransportOperation<void> discover_leader();
+	TransportOperation<void> discover_nodes();
 	TransportOperation<ClientProtocol::RpcResponse> send_and_wait(const Endpoint &leader, const ClientProtocol::RpcRequest &request);
 	TransportOperation<Frame> perform_frame_round_trip(Frame outgoing);
 

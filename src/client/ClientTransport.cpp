@@ -43,7 +43,7 @@ TransportOperation<void> ClientTransport::connect(std::span<const Endpoint> seed
 	seed_nodes_.assign(seed_nodes.begin(), seed_nodes.end());
 	current_leader_.reset();
 
-	return discover_leader();
+	return discover_nodes();
 }
 
 // Ensures that the transport has a TCP connection to the supplied endpoint.
@@ -158,7 +158,7 @@ TransportOperation<void> ClientTransport::connect_to(const Endpoint &endpoint) {
 	}
 }
 
-TransportOperation<void> ClientTransport::discover_leader() {
+TransportOperation<void> ClientTransport::discover_nodes() {
 	if (seed_nodes_.empty()) {
 		return std::unexpected(TransportError{
 			TransportErrorCode::NO_SEEDS,

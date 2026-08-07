@@ -6,13 +6,27 @@
 
 using NodeId = std::string;
 
+enum class NodeRole : std::uint8_t {
+	CLIENT,
+	METADATA,
+	STORAGE
+};
+
 struct Endpoint {
 	NodeId node_id;
+	NodeRole role = NodeRole::CLIENT;
 	std::string host;
 	std::uint16_t port = 0;
 
 	// Returns a stable "host:port" string used for maps and deduplication.
 	std::string key() const;
+};
+
+struct NodeIdentity {
+	NodeId id;
+	NodeRole role;
+
+	bool operator==(const NodeIdentity &) const = default;
 };
 
 namespace Node {

@@ -38,7 +38,7 @@ struct Frame {
 };
 
 struct Message {
-	NodeId sender;
+	NodeIdentity sender;
 	MessageHeader header;
 	std::vector<std::byte> buffer;
 };

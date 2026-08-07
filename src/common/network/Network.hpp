@@ -17,16 +17,19 @@ enum class NetworkStatus {
 	OFF,
 };
 
-struct Connection {
-	explicit Connection(asio::io_context &context, bool outgoing)
-		: socket(context), outgoing(outgoing) {}
+struct Hello {
+	NodeIdentity identity;
+	std::optional<Endpoint> advertised_endpoint;
+};
 
-	explicit Connection(asio::ip::tcp::socket socket, bool outgoing)
-		: socket(std::move(socket)), outgoing(outgoing) {}
+struct Connection {
+	explicit Connection(asio::io_context &context, bool outgoing) : socket(context), outgoing(outgoing) {}
+
+	explicit Connection(asio::ip::tcp::socket socket, bool outgoing) : socket(std::move(socket)), outgoing(outgoing) {}
 
 	asio::ip::tcp::socket socket;
-	std::optional<NodeId> peer_id;
-	std::optional<NodeId> expected_peer_id;
+	std::optional<NodeIdentity> remote;
+	std::optional<NodeIdentity> expected_remote;
 	bool outgoing;
 };
 
@@ -47,9 +50,10 @@ class Network final : public Singleton<Network> {
 
   private:
 	void schedule_reconnect(const Endpoint &peer);
-	void register_connection(std::shared_ptr<Connection> connection, Endpoint peer);
+	void register_connection(std::shared_ptr<Connection> connection, Hello hello);
+	void unregister_connection(std::shared_ptr<Connection> connection);
 
-	void start_reading(NodeId node_id, std::shared_ptr<Connection> connection);
+	void start_reading(std::shared_ptr<Connection> connection);
 
 	void send_hello(std::shared_ptr<Connection> connection);
 	void read_hello(std::shared_ptr<Connection> connection);
@@ -65,9 +69,13 @@ class Network final : public Singleton<Network> {
 	std::jthread network_thread_;
 
 	Endpoint self_ = Endpoint{};
-	std::unordered_map<NodeId, std::shared_ptr<Connection>> connections_; // { node_id : socket }
-	std::unordered_map<NodeId, Endpoint> peers_;
+	std::unordered_map<NodeId, Endpoint> known_nodes_;
 	std::unordered_set<std::shared_ptr<Connection>> pending_connections_;
+
+	// { node_id : socket }
+	std::unordered_map<NodeId, std::shared_ptr<Connection>> metadata_connections_;
+	std::unordered_map<NodeId, std::shared_ptr<Connection>> storage_connections_;
+	std::unordered_map<NodeId, std::shared_ptr<Connection>> client_connections_;
 };
 
 #endif // NETWORK_HPP
