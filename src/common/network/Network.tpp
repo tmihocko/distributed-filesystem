@@ -1,18 +1,21 @@
 #ifndef NETWORK_TPP
 #define NETWORK_TPP
+
+#ifndef NETWORK_HPP
+#include "network/Network.hpp"
+#endif
+
+#include <iostream>
 #include "asio/post.hpp"
 #include "network/Message.hpp"
-#ifndef NETWORK_HPP
-#include "Network.hpp"
-#endif
 #include "network/Node.hpp"
 #include "network/Packet.hpp"
 #include "network/FrameIO.hpp"
+#include <ranges>
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::start(std::span<const Endpoint> seed_nodes) {
+template <NodeRole SelfRole>
+void Network<SelfRole>::start(std::span<const Endpoint> seed_nodes) {
 	connections_.clear();
-
 	for (const auto &endpoint : seed_nodes) {
 		if (!should_connect(endpoint)) continue;
 
@@ -28,8 +31,8 @@ void Network<SelfRole, PeerRoles...>::start(std::span<const Endpoint> seed_nodes
 	});
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::send(NodeId node_id, Frame frame) {
+template <NodeRole SelfRole>
+void Network<SelfRole>::send(NodeId node_id, Frame frame) {
 	asio::post(context_, [this, node_id = std::move(node_id), frame = std::move(frame)]() mutable {
 		auto it = connections_.find(node_id);
 
@@ -39,8 +42,8 @@ void Network<SelfRole, PeerRoles...>::send(NodeId node_id, Frame frame) {
 	});
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::broadcast(NodeRole role, Frame frame) {
+template <NodeRole SelfRole>
+void Network<SelfRole>::broadcast(NodeRole role, Frame frame) {
 	assert(can_connect_with_role(role));
 	asio::post(context_, [this, role, frame = std::move(frame)]() mutable {
 		for (const auto &[id, connection] : connections_) {
@@ -51,29 +54,38 @@ void Network<SelfRole, PeerRoles...>::broadcast(NodeRole role, Frame frame) {
 	});
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-Message Network<SelfRole, PeerRoles...>::receive() {
+template <NodeRole SelfRole>
+Message Network<SelfRole>::receive() {
 	return message_queue_.pop();
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
+template <NodeRole SelfRole>
 template <typename Rep, typename Period>
-std::optional<Message> Network<SelfRole, PeerRoles...>::receive(std::chrono::duration<Rep, Period> timeout) {
+std::optional<Message> Network<SelfRole>::receive(std::chrono::duration<Rep, Period> timeout) {
 	return message_queue_.pop(timeout);
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-constexpr bool Network<SelfRole, PeerRoles...>::can_connect_with_role(NodeRole role) {
-	return ((role == PeerRoles) || ...);
+template <NodeRole SelfRole>
+auto Network<SelfRole>::nodes_of_role(NodeRole role) {
+	return connections_ |
+		   std::views::values |
+		   std::views::filter([role](const Connection &ep) {
+			   return ep.remote->role == role;
+		   });
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-bool Network<SelfRole, PeerRoles...>::should_connect(const Endpoint &endpoint) {
+template <NodeRole SelfRole>
+constexpr bool Network<SelfRole>::can_connect_with_role(NodeRole role) {
+	return (PeerRoles<SelfRole> & role_bit(role)) != 0;
+}
+
+template <NodeRole SelfRole>
+bool Network<SelfRole>::should_connect(const Endpoint &endpoint) {
 	return can_connect_with_role(endpoint.role) && self_.node_id < endpoint.node_id;
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::connect(const Endpoint &endpoint) {
+template <NodeRole SelfRole>
+void Network<SelfRole>::connect(const Endpoint &endpoint) {
 	using asio::ip::tcp;
 
 	auto resolver = std::make_shared<tcp::resolver>(context_);
@@ -116,8 +128,8 @@ void Network<SelfRole, PeerRoles...>::connect(const Endpoint &endpoint) {
 		});
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::start_accepting() {
+template <NodeRole SelfRole>
+void Network<SelfRole>::start_accepting() {
 	asio::ip::tcp::endpoint local{ asio::ip::make_address(self_.host), self_.port };
 
 	acceptor_.open(local.protocol());
@@ -125,8 +137,8 @@ void Network<SelfRole, PeerRoles...>::start_accepting() {
 	acceptor_.bind(local);
 	acceptor_.listen();
 
-	auto accept_one = [this](this auto self) {
-		acceptor_.async_accept([this, self](const asio::error_code &error, asio::ip::tcp::socket socket) mutable {
+	auto accept_one = [this](this auto self) -> void {
+		acceptor_.async_accept([this, self](const asio::error_code &error, asio::ip::tcp::socket socket) {
 			if (error) {
 				if (error != asio::error::operation_aborted && acceptor_.is_open()) {
 					self();
@@ -150,8 +162,9 @@ void Network<SelfRole, PeerRoles...>::start_accepting() {
 	accept_one();
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::register_connection(ConnectionPtr connection, NodeIdentity remote) {
+template <NodeRole SelfRole>
+void Network<SelfRole>::register_connection(ConnectionPtr connection, NodeIdentity remote) {
+	std::cout << "Registered: " + self_.node_id + "<->" + remote.id << std::endl;
 	connection->remote = remote;
 
 	pending_connections_.erase(connection);
@@ -160,8 +173,8 @@ void Network<SelfRole, PeerRoles...>::register_connection(ConnectionPtr connecti
 	start_reading(connection);
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::start_reading(ConnectionPtr connection) {
+template <NodeRole SelfRole>
+void Network<SelfRole>::start_reading(ConnectionPtr connection) {
 	if (!connection->remote) {
 		fail_connection(connection);
 		return;
@@ -195,8 +208,8 @@ void Network<SelfRole, PeerRoles...>::start_reading(ConnectionPtr connection) {
 		});
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::handshake(ConnectionPtr connection) {
+template <NodeRole SelfRole>
+void Network<SelfRole>::handshake(ConnectionPtr connection) {
 	PacketWriter writer;
 
 	const std::uint8_t has_endpoint = !self_.host.empty() && self_.port != 0;
@@ -297,10 +310,9 @@ void Network<SelfRole, PeerRoles...>::handshake(ConnectionPtr connection) {
 		});
 }
 
-template <NodeRole SelfRole, NodeRole... PeerRoles>
-void Network<SelfRole, PeerRoles...>::fail_connection(ConnectionPtr connection) {
+template <NodeRole SelfRole>
+void Network<SelfRole>::fail_connection(ConnectionPtr connection) {
 	connection->close();
-
 	pending_connections_.erase(connection);
 
 	if (!connection->remote) return;
@@ -310,6 +322,11 @@ void Network<SelfRole, PeerRoles...>::fail_connection(ConnectionPtr connection) 
 	if (it != connections_.end() && it->second == connection) {
 		connections_.erase(it);
 	}
+
+	// Log ?
 }
+
+template <NodeRole SelfRole>
+void Network<SelfRole>::schedule_reconnect(const Endpoint &endpoint) {}
 
 #endif // NETWORK_TPP

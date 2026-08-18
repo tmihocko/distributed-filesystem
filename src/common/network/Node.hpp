@@ -12,6 +12,27 @@ enum class NodeRole : std::uint8_t {
 	STORAGE
 };
 
+constexpr std::uint8_t role_bit(NodeRole role) {
+	return 1u << static_cast<std::uint8_t>(role);
+}
+
+template <NodeRole Role>
+inline constexpr std::uint8_t PeerRoles = 0;
+
+template <>
+inline constexpr std::uint8_t PeerRoles<NodeRole::METADATA> =
+	role_bit(NodeRole::METADATA) |
+	role_bit(NodeRole::STORAGE) |
+	role_bit(NodeRole::CLIENT);
+
+template <>
+inline constexpr std::uint8_t PeerRoles<NodeRole::STORAGE> =
+	role_bit(NodeRole::METADATA);
+
+template <>
+inline constexpr std::uint8_t PeerRoles<NodeRole::CLIENT> =
+	role_bit(NodeRole::METADATA);
+
 struct Endpoint {
 	NodeId node_id;
 	NodeRole role = NodeRole::CLIENT;

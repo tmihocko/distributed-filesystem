@@ -17,7 +17,7 @@ enum class ConnectionOrigin {
 
 class Connection : public std::enable_shared_from_this<Connection> {
   public:
-	using FailureHandler = std::function<void(std::shared_ptr<Connection>, asio::error_code)>;
+	using FailureHandler = std::function<void(std::shared_ptr<Connection>)>;
 
 	Connection(asio::ip::tcp::socket socket, ConnectionOrigin origin, FailureHandler failure_handler) : socket(std::move(socket)), origin(origin), failure_handler_(std::move(failure_handler)) {}
 
@@ -27,6 +27,8 @@ class Connection : public std::enable_shared_from_this<Connection> {
 	std::optional<NodeIdentity> expected_remote;
 
 	void enqueue_write(Frame frame) {
+		if (closed_) return;
+
 		write_queue_.push(std::move(frame));
 
 		if (!write_in_progress_) {
@@ -50,6 +52,10 @@ class Connection : public std::enable_shared_from_this<Connection> {
 		socket.close(ignored);
 	}
 
+	~Connection() {
+		close();
+	}
+
   private:
 	FailureHandler failure_handler_;
 
@@ -70,13 +76,13 @@ class Connection : public std::enable_shared_from_this<Connection> {
 		Frame frame = std::move(write_queue_.front());
 		write_queue_.pop();
 
-		FrameIO::async_write_frame(socket, frame, [self = shared_from_this()](const asio::error_code &error, std::size_t) {
+		FrameIO::async_write_frame(socket, std::move(frame), [self = shared_from_this()](const asio::error_code &error, std::size_t) {
 			if (self->closed_) return;
 
 			if (error) {
 				self->write_in_progress_ = false;
 
-				self->failure_handler_(self, error);
+				self->failure_handler_(self);
 				return;
 			}
 
