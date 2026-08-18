@@ -1,13 +1,16 @@
 node:
   node_id: "node_a"
+  role: "Metadata"
   host: "127.0.0.1"
   port: 8000
 
 seed_nodes:
   - node_id: "node_b"
+    role: "Metadata"
     host: "127.0.0.1"
     port: 8001
   - node_id: "node_c"
+    role: "Metadata"
     host: "127.0.0.1"
     port: 8002
     

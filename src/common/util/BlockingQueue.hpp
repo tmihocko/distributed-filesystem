@@ -34,6 +34,20 @@ class BlockingQueue {
 		return item;
 	}
 
+	// Blocks until item is available
+	T pop() {
+		std::unique_lock<std::mutex> lock(mutex_);
+
+		cv_.wait(lock, [this]() {
+			return !queue_.empty();
+		});
+
+		T item = std::move(queue_.front());
+		queue_.pop();
+
+		return item;
+	}
+
   private:
 	std::queue<T> queue_;
 	std::mutex mutex_;

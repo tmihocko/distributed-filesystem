@@ -28,7 +28,8 @@ void Network::start_reading(std::shared_ptr<Connection> connection) {
 		connection->socket,
 		[this, remote = std::move(remote), connection = std::move(connection)](asio::error_code error, std::optional<Frame> msg) {
 			if (error || !msg) {
-				connection->socket.close();
+				asio::error_code ignored;
+				connection->socket.close(ignored);
 
 				unregister_connection(connection);
 				return;
@@ -80,31 +81,28 @@ void Network::unregister_connection(std::shared_ptr<Connection> connection) {
 	pending_connections_.erase(connection);
 }
 
-// void Network::run() {
-// 	if (status_ == NetworkStatus::ACTIVE) return;
-// 	// Read messages and put into message queue
+void Network::run() {
+	if (status_ == NetworkStatus::ACTIVE) return;
+	// Read messages and put into message queue
 
-// 	using asio::ip::tcp;
+	using asio::ip::tcp;
 
-// 	tcp::endpoint local{ asio::ip::make_address(self_.host), self_.port };
+	tcp::endpoint local{ asio::ip::make_address(self_.host), self_.port };
 
-// 	acceptor_.open(local.protocol());
-// 	acceptor_.set_option(tcp::acceptor::reuse_address(true));
-// 	acceptor_.bind(local);
-// 	acceptor_.listen();
+	acceptor_.open(local.protocol());
+	acceptor_.set_option(tcp::acceptor::reuse_address(true));
+	acceptor_.bind(local);
+	acceptor_.listen();
 
-// 	status_ = NetworkStatus::ACTIVE;
-// 	accept_peers();
+	status_ = NetworkStatus::ACTIVE;
+	accept_peers();
 
-// 	for (auto &[id, connection] : connections_) {
-// 		start_reading(id, connection);
-// 	}
-// 	network_thread_ = std::jthread{
-// 		[this]() {
-// 			context_.run();
-// 		}
-// 	};
-// }
+	network_thread_ = std::jthread{
+		[this]() {
+			context_.run();
+		}
+	};
+}
 
 void Network::accept_peers() {
 	acceptor_.async_accept([this](const asio::error_code &error, asio::ip::tcp::socket socket) {
@@ -122,21 +120,25 @@ void Network::accept_peers() {
 	});
 }
 
-// void Network::find_peers(const std::string &config_file) {
-// 	assert(status_ == NetworkStatus::HANDSHAKING);
-// 	self_ = Node::get_node_info(config_file);
-// 	std::vector<Endpoint> seed_nodes = Node::get_seed_nodes(config_file);
+void Network::find_peers(const std::string &config_file) {
+	assert(status_ == NetworkStatus::HANDSHAKING);
 
-// 	peers_.clear();
+	self_ = Node::get_node_info(config_file);
+	std::vector<Endpoint> seed_nodes = Node::get_seed_nodes(config_file);
 
-// 	for (const auto &peer : seed_nodes) {
-// 		const NodeId id = peer.node_id;
-// 		if (id.empty() || id == self_.node_id) continue;
+	known_nodes_.clear();
 
-// 		peers_.insert_or_assign(id, peer);
-// 		connect_to_peer(peer);
-// 	}
-// }
+	for (const Endpoint &peer : seed_nodes) {
+		if (peer.node_id.empty() ||
+			peer.node_id == self_.node_id ||
+			peer.role == NodeRole::CLIENT) {
+			continue;
+		}
+
+		known_nodes_.insert_or_assign(peer.node_id, peer);
+		connect_to_peer(peer);
+	}
+}
 
 void Network::schedule_reconnect(const Endpoint &peer) {}
 
@@ -200,7 +202,7 @@ void Network::connect_to_peer(const Endpoint &peer) {
 						return;
 					}
 
-					connection->remote->id = peer.node_id;
+					pending_connections_.insert(connection);
 
 					send_hello(connection);
 					read_hello(connection);
@@ -208,21 +210,16 @@ void Network::connect_to_peer(const Endpoint &peer) {
 		});
 }
 
-// void Network::async_send_frame(std::shared_ptr<Connection> connection, Frame frame) {
+// Sends one frame and removes the connection from its registry if writing fails.
+void Network::async_send_frame(std::shared_ptr<Connection> connection, Frame frame) {
 
-// 	FrameIO::async_write_frame(connection->socket, std::move(frame), [this, connection](const asio::error_code &error, std::size_t) {
-// 		if (!error) return;
+	FrameIO::async_write_frame(connection->socket, std::move(frame), [this, connection](const asio::error_code &error, std::size_t) {
+		if (!error) return;
 
-// 		if (connection->peer_id) {
-// 			auto it = connections_.find(*connection->peer_id);
-
-// 			if (it != connections_.end() && it->second == connection) {
-// 				connections_.erase(it);
-// 			}
-// 		}
-// 		close_pending(connection);
-// 	});
-// }
+		unregister_connection(connection);
+		close_pending(connection);
+	});
+}
 
 void Network::shutdown() {
 }
@@ -278,6 +275,22 @@ void Network::read_hello(std::shared_ptr<Connection> connection) {
 
 				const auto has_endpoint = reader.read<std::uint8_t>();
 
+				const bool valid_role =
+					role == NodeRole::CLIENT ||
+					role == NodeRole::METADATA ||
+					role == NodeRole::STORAGE;
+
+				if (!valid_role || id.empty() || has_endpoint > 1) {
+					close_pending(connection);
+					return;
+				}
+
+				if ((role == NodeRole::CLIENT && has_endpoint != 0) ||
+					(role != NodeRole::CLIENT && has_endpoint != 1)) {
+					close_pending(connection);
+					return;
+				}
+
 				std::optional<Endpoint> endpoint;
 
 				if (has_endpoint == 1) {
@@ -285,8 +298,7 @@ void Network::read_hello(std::shared_ptr<Connection> connection) {
 						.node_id = id,
 						.role = role,
 						.host = reader.read_string(),
-						.port =
-							reader.read<std::uint16_t>(),
+						.port = reader.read<std::uint16_t>(),
 					};
 				}
 
