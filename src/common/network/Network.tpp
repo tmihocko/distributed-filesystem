@@ -1,6 +1,9 @@
 #ifndef NETWORK_TPP
 #define NETWORK_TPP
 
+#include "asio/steady_timer.hpp"
+#include <chrono>
+#include <memory>
 #ifndef NETWORK_HPP
 #include "network/Network.hpp"
 #endif
@@ -327,6 +330,14 @@ void Network<SelfRole>::fail_connection(ConnectionPtr connection) {
 }
 
 template <NodeRole SelfRole>
-void Network<SelfRole>::schedule_reconnect(const Endpoint &endpoint) {}
+void Network<SelfRole>::schedule_reconnect(const Endpoint &endpoint) {
+	auto timer = std::make_shared<asio::steady_timer>(context_, std::chrono::seconds{ 1 });
+
+	timer->async_wait([this, endpoint, timer](const asio::error_code &error) {
+		if (error || connections_.contains(endpoint.node_id)) return;
+
+		connect(endpoint);
+	});
+}
 
 #endif // NETWORK_TPP

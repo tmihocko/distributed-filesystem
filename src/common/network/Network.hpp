@@ -18,7 +18,9 @@ using ConnectionPtr = std::shared_ptr<Connection>;
 template <NodeRole SelfRole>
 class Network {
   public:
-	Network(Endpoint self) : self_(self) {}
+	Network(Endpoint self) : self_(self) {
+		assert(self.role == SelfRole);
+	}
 
 	void start(std::span<const Endpoint> seed_nodes);
 
@@ -39,7 +41,7 @@ class Network {
 	// By role
 	static constexpr bool can_connect_with_role(NodeRole role);
 
-	// Removes duplicate and incorrect connections
+	// Removes duplicate and incorrect connections,
 	bool should_connect(const Endpoint &endpoint);
 
 	// Attempt to connect with endpoint, does not handshake
