@@ -1,3 +1,6 @@
+#ifndef NUMBER_CONVERSION_HPP
+#define NUMBER_CONVERSION_HPP
+
 #include <charconv>
 #include <concepts>
 #include <stdexcept>
@@ -45,3 +48,5 @@ template <NumericInteger T>
 
 	return value;
 }
+
+#endif // NUMBERCONVERSION_HPP

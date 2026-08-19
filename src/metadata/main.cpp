@@ -27,7 +27,7 @@ int main(int argc, const char *argv[]) {
 		case MessageType::HEARTBEAT:
 			std::cout << "beat" << std::endl;
 			break;
-		case MessageType::CLIENT_REQUEST: {
+		case MessageType::CLIENT_CREATE_FILE: {
 			if (message.sender.role != NodeRole::CLIENT) break;
 
 			PacketReader reader{ std::move(message.buffer) };
@@ -46,22 +46,13 @@ int main(int argc, const char *argv[]) {
 }
 
 /**
-Recommended next order
-- Add the temporary reconnect definition.
-- Remove or store the decoded endpoint.
-- Test two nodes connecting and exchanging frames.
-- Add duplicate handling.
-- Add shutdown.
-- Migrate ClientTransport onto the new Network.
 
-After the first four items, you should finally get meaningful compiler feedback from the new implementation.
-Right now the project build succeeding does not prove that this new network compiles.
+TODO:
+CLient
+Client Transport, etc.
 
-what is the decoded endpoint, i lowkey forgot why i even have those, im just using connectoins can i just ignore it,
-
-
-
-
-Make public API to see nodes of type NodeRole
+Do SOME stuff on Metadata node,
+Define specifically requirements of metadata and storage,
+Erasure coding 3+S
 
 */

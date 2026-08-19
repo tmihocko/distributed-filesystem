@@ -1,9 +1,9 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
-#include "ClientTransport.hpp"
 #include "network/Node.hpp"
 #include "util/Singleton.hpp"
 #include <expected>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -43,7 +43,6 @@ class Client final : public Singleton<Client> {
 	ClientOperation<FileInfo> stat(std::string path);
 
   private:
-	ClientTransport &transport_ = ClientTransport::get();
 };
 
 #endif // CLIENT_HPP

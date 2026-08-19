@@ -18,6 +18,7 @@ class BlockingQueue {
 		cv_.notify_one();
 	}
 
+	// Blocks until item is available or timeout has passed,
 	template <typename Rep, typename Period>
 	std::optional<T> pop(std::chrono::duration<Rep, Period> timeout) {
 		std::unique_lock<std::mutex> lock(mutex_);
