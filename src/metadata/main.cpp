@@ -1,7 +1,6 @@
 #include "network/Message.hpp"
 #include "network/Network.hpp"
 #include "network/Node.hpp"
-#include "network/Packet.hpp"
 #include <iostream>
 
 int main(int argc, const char *argv[]) {
@@ -24,19 +23,16 @@ int main(int argc, const char *argv[]) {
 		auto message = network.receive();
 
 		switch (message.header.type) {
-		case MessageType::HEARTBEAT:
-			std::cout << "beat" << std::endl;
+		case MessageType::CLIENT_RPC:
+			// Client_Rpc.do_thing(std::move(message));
+			std::cout << "client request" << std::endl;
 			break;
-		case MessageType::CLIENT_CREATE_FILE: {
-			if (message.sender.role != NodeRole::CLIENT) break;
-
-			PacketReader reader{ std::move(message.buffer) };
-
-			// Find type of client request,
-			// Metadata::Do_Stuff<req>()
-
+		case MessageType::STORAGE_RPC:
+			std::cout << "storage request" << std::endl;
 			break;
-		}
+		case MessageType::CONSENSUS:
+			std::cout << "rafte" << std::endl;
+			break;
 		default:
 			break;
 		}

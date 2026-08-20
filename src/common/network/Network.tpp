@@ -1,13 +1,13 @@
 #ifndef NETWORK_TPP
 #define NETWORK_TPP
 
-#include "asio/steady_timer.hpp"
-#include <chrono>
-#include <memory>
 #ifndef NETWORK_HPP
 #include "network/Network.hpp"
 #endif
 
+#include "asio/steady_timer.hpp"
+#include <chrono>
+#include <memory>
 #include <iostream>
 #include "asio/post.hpp"
 #include "network/Message.hpp"
@@ -257,9 +257,8 @@ void Network<SelfRole>::handshake(ConnectionPtr connection) {
 					try {
 						PacketReader reader{ frame->buffer };
 
-						const NodeRole role = reader.read<NodeRole>();
-						const NodeId id = reader.read_string();
-						const std::uint8_t has_endpoint = reader.read<std::uint8_t>();
+						const auto [role, id, has_endpoint] = reader.read<NodeRole, std::string, std::uint8_t>();
+
 						const bool valid_role =
 							role == NodeRole::CLIENT ||
 							role == NodeRole::METADATA ||
@@ -276,8 +275,7 @@ void Network<SelfRole>::handshake(ConnectionPtr connection) {
 						std::optional<Endpoint> endpoint;
 
 						if (has_endpoint == 1) {
-							std::string host = reader.read_string();
-							std::uint16_t port = reader.read<std::uint16_t>();
+							const auto [host, port] = reader.read<std::string, std::uint16_t>();
 
 							if (host.empty() || port == 0) {
 								fail_connection(connection);

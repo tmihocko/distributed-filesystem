@@ -3,23 +3,34 @@
 #include <iterator>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <vector>
 
 template <typename T>
-concept PacketWritable = std::is_trivially_copyable_v<T>;
-
+concept PacketSerializable = std::is_trivially_copyable_v<T> || std::is_same_v<std::string, T>;
 class PacketWriter {
   public:
-	template <PacketWritable T>
+	PacketWriter() = default;
+
+	template <PacketSerializable... Ts>
+	explicit PacketWriter(const Ts &...values) {
+		(write(values), ...);
+	}
+
+	template <PacketSerializable T>
 	PacketWriter &write(const T &value) {
-		assert_valid();
-		auto old = buffer_.size();
+		if constexpr (std::is_same_v<std::string, T>) {
+			return write_string(value);
+		} else {
+			assert_valid();
 
-		buffer_.resize(old + sizeof(T));
-		std::memcpy(buffer_.data() + old, &value, sizeof(T));
+			auto old = buffer_.size();
+			buffer_.resize(old + sizeof(T));
+			std::memcpy(buffer_.data() + old, &value, sizeof(T));
 
-		return *this;
+			return *this;
+		}
 	}
 
 	// Writes until null terminator
@@ -58,19 +69,23 @@ class PacketReader {
   public:
 	PacketReader(std::span<const std::byte> bytes) : data_(bytes) {}
 
-	template <PacketWritable T>
+	template <PacketSerializable T>
 	T read() {
-		if (offset_ > data_.size() || sizeof(T) > data_.size() - offset_) {
-			throw std::out_of_range("PacketReader buffer underrun");
-		}
+		if constexpr (std::is_same_v<std::string, T>) {
+			return read_string();
+		} else {
+			if (offset_ > data_.size() || sizeof(T) > data_.size() - offset_) {
+				throw std::out_of_range("PacketReader buffer underrun");
+			}
 
-		T value;
-		std::memcpy(&value, data_.data() + offset_, sizeof(T));
-		offset_ += sizeof(T);
-		return value;
+			T value;
+			std::memcpy(&value, data_.data() + offset_, sizeof(T));
+			offset_ += sizeof(T);
+			return value;
+		}
 	};
 
-	template <PacketWritable... Ts>
+	template <PacketSerializable... Ts>
 		requires(sizeof...(Ts) > 1)
 	std::tuple<Ts...> read() {
 		return std::tuple<Ts...>{ read<Ts>()... };

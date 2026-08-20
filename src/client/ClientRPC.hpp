@@ -1,7 +1,8 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
+#include "network/Network.hpp"
 #include "network/Node.hpp"
-#include "util/Singleton.hpp"
+#include "rpc/ClientProtocol.hpp"
 #include <expected>
 #include <span>
 #include <string>
@@ -22,8 +23,10 @@ struct FileInfo {
 template <typename T>
 using ClientOperation = std::expected<T, ClientError>;
 
-class Client final : public Singleton<Client> {
+class Client {
   public:
+	Client(Endpoint self, std::span<Endpoint> seed_nodes);
+
 	ClientOperation<void> connect(const std::vector<Endpoint> &seed_nodes);
 
 	ClientOperation<void> create_file(std::string path);
@@ -43,6 +46,12 @@ class Client final : public Singleton<Client> {
 	ClientOperation<FileInfo> stat(std::string path);
 
   private:
+	template <ClientJob job>
+	Frame make_frame(std::span<const std::byte> buffer);
+
+	Network<NodeRole::CLIENT> network_;
+
+	std::optional<NodeId> leader_;
 };
 
 #endif // CLIENT_HPP
