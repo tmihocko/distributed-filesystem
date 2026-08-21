@@ -108,9 +108,11 @@ class PacketReader {
 		return value;
 	}
 
-	bool at_end() const noexcept;
-
+	std::vector<std::byte> read_remaining();
 	std::vector<std::byte> read_bytes(std::size_t n);
+
+	std::size_t remaining() const noexcept;
+	bool at_end() const noexcept;
 
   private:
 	std::span<const std::byte> data_;

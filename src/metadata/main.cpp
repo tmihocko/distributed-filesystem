@@ -1,5 +1,4 @@
-#include "network/Message.hpp"
-#include "network/Network.hpp"
+#include "MetadataNode.hpp"
 #include "network/Node.hpp"
 #include <iostream>
 
@@ -13,42 +12,17 @@ int main(int argc, const char *argv[]) {
 
 	std::string config_file = argv[1];
 
-	std::vector<Endpoint> seed_nodes = Node::get_seed_nodes(config_file);
 	Endpoint self = Node::get_node_info(config_file);
+	std::vector<Endpoint> seed_nodes = Node::get_seed_nodes(config_file);
 
-	Network<NodeRole::METADATA> network(self);
-	network.start(seed_nodes);
+	MetadataNode metadata{ self, seed_nodes };
 
-	while (true) {
-		auto message = network.receive();
-
-		switch (message.header.type) {
-		case MessageType::CLIENT_RPC:
-			// Client_Rpc.do_thing(std::move(message));
-			std::cout << "client request" << std::endl;
-			break;
-		case MessageType::STORAGE_RPC:
-			std::cout << "storage request" << std::endl;
-			break;
-		case MessageType::CONSENSUS:
-			std::cout << "rafte" << std::endl;
-			break;
-		default:
-			break;
-		}
-		// RPC switch
-		// Do stuff
-	}
+	metadata.start();
 }
 
 /**
 
 TODO:
-CLient
-Client Transport, etc.
 
-Do SOME stuff on Metadata node,
-Define specifically requirements of metadata and storage,
-Erasure coding 3+S
 
 */

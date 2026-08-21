@@ -2,7 +2,6 @@
 #define CLIENT_HPP
 #include "network/Network.hpp"
 #include "network/Node.hpp"
-#include "rpc/ClientProtocol.hpp"
 #include <expected>
 #include <span>
 #include <string>
@@ -11,6 +10,7 @@
 enum ClientError : std::uint8_t {
 	AlreadyExists,
 	ServerError,
+	BadResponse,
 	NotImplemented,
 };
 
@@ -46,8 +46,8 @@ class Client {
 	ClientOperation<FileInfo> stat(std::string path);
 
   private:
-	template <ClientJob job>
-	Frame make_frame(std::span<const std::byte> buffer);
+	std::uint64_t next_id();
+	std::uint64_t current_id_ = 0;
 
 	Network<NodeRole::CLIENT> network_;
 

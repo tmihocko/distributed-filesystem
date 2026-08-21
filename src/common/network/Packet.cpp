@@ -31,6 +31,14 @@ std::vector<std::byte> PacketReader::read_bytes(std::size_t n) {
 	return out;
 }
 
+std::vector<std::byte> PacketReader::read_remaining() {
+	return read_bytes(remaining());
+};
+
+std::size_t PacketReader::remaining() const noexcept {
+	return data_.size() - offset_;
+}
+
 bool PacketReader::at_end() const noexcept {
 	return offset_ == data_.size();
 }

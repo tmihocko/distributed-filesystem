@@ -57,6 +57,7 @@ void Network<SelfRole>::broadcast(NodeRole role, Frame frame) {
 	});
 }
 
+// Returns the oldest message received or waits until next message and then returns
 template <NodeRole SelfRole>
 Message Network<SelfRole>::receive() {
 	return message_queue_.pop();
