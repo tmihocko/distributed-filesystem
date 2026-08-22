@@ -1,54 +1,61 @@
 #include "Client.hpp"
-#include "network/Message.hpp"
 #include "network/Node.hpp"
-#include "network/Packet.hpp"
 #include "rpc/ClientProtocol.hpp"
 #include "rpc/Rpc.hpp"
 #include <cstdint>
 #include <expected>
 
-Client::Client(Endpoint self, std::span<Endpoint> seed_nodes) : network_(self) {
+Client::Client(Endpoint self, std::span<Endpoint> seed_nodes) : self_(self), network_(self) {
 	network_.start(seed_nodes);
 }
 
 ClientOperation<void> Client::create_file(std::string path) {
-	PacketWriter writer{ path };
 
-	auto id = next_id();
+	auto request_id = next_id();
 
-	Frame frame = Rpc::make_frame(id, ClientJob::CREATE_FILE, RpcKind::Request, writer.move_data());
+	CreateFileRequest request{
+		.path = std::move(path),
+		.context = {
+			.request_id = request_id,
+			.sender = NodeIdentity{ self_.node_id, self_.role } },
+	};
+
+	auto frame = ClientProtocol::encode_create_file_request(request_id, request);
 
 	if (leader_) {
 		network_.send(*leader_, frame);
 	} else {
-		// Maybe make Network::send_to_one(NodeRole, frame);
-		network_.broadcast(NodeRole::METADATA, frame);
+		// network_.send_to_one_of<NodeRole::Metadata>(frame);
 	}
 
-	// This should run syncronously, since client side is single-threaded,
-	// we can just receive the next message since metadata nodes only respond to client
-	Message response = network_.receive();
+	auto message = network_.receive();
+	auto rpc_message = Rpc::read_message<ClientJob>(message);
 
-	if (response.header.type != MessageType::CLIENT_RPC) return std::unexpected(ClientError::BadResponse);
-
-	RpcMessage<ClientJob> rpc_message = Rpc::read_message<ClientJob>(response);
-
-	// reading should be in generalized rpc, maybe?
-	PacketReader reader{ rpc_message.body };
-
+	if (rpc_message.rpc_header.request_id != request_id) return std::unexpected(ClientError::BadResponse);
 	if (rpc_message.rpc_header.kind != RpcKind::Response) return std::unexpected(ClientError::BadResponse);
-	if (rpc_message.rpc_header.request_id != id) return std::unexpected(ClientError::BadResponse);
 
-	if (rpc_message.rpc_header.job == ClientJob::LEADER_HINT) { // Is this correct usage of header.job, maybe we use bit to show
-		leader_ = reader.read_string();
-		return create_file(path); // This might not be the best course of action, return an unexpected? wont matter much though
-	} else {
-		bool success = reader.read<std::uint8_t>() == 1;
-		if (!success) {
-			return std::unexpected(ClientError::ServerError);
-		} else {
-			return {};
-		}
+	switch (rpc_message.rpc_header.job) {
+	case ClientJob::CREATE_FILE: {
+		CreateFileResponse response = ClientProtocol::decode_create_file_response(rpc_message);
+		if (response.status != ClientStatus::Success) return std::unexpected(ClientError::ServerError);
+
+		leader_ = rpc_message.sender.id; // Incase our network.send_to_one_of landed on the leader
+		return {};
+		break;
+	}
+	// This should be generalized to a update_leader(NodeId new_leader, std::function retry)
+	case ClientJob::NOT_LEADER: {
+		LeaderHintResponse response = ClientProtocol::decode_leader_hint_response(rpc_message);
+
+		if (!response.leader_id) return std::unexpected(ClientError::ServerError);
+
+		leader_ = std::move(response.leader_id);
+		return create_file(path); // retry
+
+		break;
+	}
+	default:
+		throw std::runtime_error("Unexpected job type");
 	}
 
 	/**

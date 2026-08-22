@@ -37,16 +37,21 @@ enum class ClientStatus : std::uint8_t {
 	InputError = 2,
 };
 
+struct RequestContext {
+	std::uint64_t request_id;
+	NodeIdentity sender;
+};
+
 struct CreateFileRequest {
 	std::string path;
-	ClientRpcMessage message;
+	RequestContext context;
 };
 struct CreateFileResponse {
 	ClientStatus status;
 };
 
 struct LeaderHintRequest {
-	ClientRpcMessage message;
+	RequestContext context;
 };
 struct LeaderHintResponse {
 	std::optional<NodeId> leader_id;

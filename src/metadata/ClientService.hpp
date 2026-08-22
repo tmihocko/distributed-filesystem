@@ -13,8 +13,6 @@ using ClientEvent = std::variant<CreateFileRequest, LeaderHintRequest, Stop>;
 class ClientService : public MailboxService<ClientEvent, ClientService> {
   public:
 	void handle(CreateFileRequest req) {
-		auto path = req;
-
 		// do_stuff(path);
 
 		// ClientProtocol
@@ -25,14 +23,14 @@ class ClientService : public MailboxService<ClientEvent, ClientService> {
 		auto leader = raft_.get_leader();
 
 		LeaderHintResponse response{ std::move(leader) };
-		auto req_id = req.message.rpc_header.request_id;
+		auto req_id = req.context.request_id;
 
 		auto frame = ClientProtocol::encode_leader_hint_response(req_id, response);
 
-		network_.send(req.message.sender.id, std::move(frame));
+		network_.send(req.context.sender.id, std::move(frame));
 	}
 
-	ClientService(auto &network) : network_(network) {}
+	ClientService(Network<NodeRole::METADATA> &network) : network_(network) {}
 
   private:
 	Network<NodeRole::METADATA> &network_;

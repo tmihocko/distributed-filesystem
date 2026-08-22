@@ -1,10 +1,12 @@
 #include "RpcAdapter.hpp"
 #include "ClientService.hpp"
+#include "RaftService.hpp"
 #include "rpc/ClientProtocol.hpp"
+#include "rpc/RaftProtocol.hpp"
 #include <cassert>
 #include <stdexcept>
 
-ClientEvent decode(ClientRpcMessage message) {
+ClientEvent RpcAdapter::decode(ClientRpcMessage message) {
 	assert(message.rpc_header.kind != RpcKind::Response); // Client cannot/should not respond to metadata
 
 	switch (message.rpc_header.job) {
@@ -18,4 +20,12 @@ ClientEvent decode(ClientRpcMessage message) {
 	default:
 		throw std::runtime_error("Job type not handled.");
 	}
+}
+
+StorageEvent RpcAdapter::decode(StorageRpcMessage message) {
+	throw std::runtime_error("Not implemented");
+}
+
+RaftEvent RpcAdapter::decode(RaftRpcMessage message) {
+	throw std::runtime_error("Not implemented");
 }

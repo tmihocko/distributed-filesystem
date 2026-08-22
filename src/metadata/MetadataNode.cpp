@@ -6,7 +6,7 @@
 #include "RpcAdapter.hpp"
 #include "rpc/StorageProtocol.hpp"
 
-MetadataNode::MetadataNode(Endpoint self, std::span<Endpoint> seed_nodes) : network_(self), client_(*this) {
+MetadataNode::MetadataNode(Endpoint self, std::span<Endpoint> seed_nodes) : network_(self), client_(network_) {
 	network_.start(seed_nodes);
 }
 
@@ -22,7 +22,9 @@ void MetadataNode::start() {
 			if (raft_.is_leader()) {
 				client_.post(RpcAdapter::decode(std::move(rpc_message)));
 			} else {
-				client_.post(LeaderHintRequest{ std::move(rpc_message) });
+				client_.post(LeaderHintRequest{ RequestContext{
+					.request_id = rpc_message.rpc_header.request_id,
+					.sender = std::move(rpc_message.sender) } });
 			}
 			break;
 		}

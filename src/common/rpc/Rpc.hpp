@@ -42,13 +42,27 @@ struct RpcTraits;
 
 namespace Rpc {
 
+template <typename Job>
+void validate_message(const Message &message) {
+	if (message.header.magic != HEADER_MAGIC) throw std::runtime_error("Magic doesn't match");
+	if (message.header.type != RpcTraits<Job>::message_type) throw std::runtime_error("Rpc has wrong protocol type");
+	if (message.header.length != message.buffer.size()) throw std::runtime_error("RPC message length mismatch");
+}
+
+template <typename Job>
+void validate_rpc_message(const RpcMessage<Job> &message) {
+	if (message.rpc_header.kind != RpcKind::Request && message.rpc_header.kind != RpcKind::Response) throw std::runtime_error("Invalid Rpc kind");
+}
+
 template <RpcJob Job>
 Frame make_frame(std::uint64_t request_id, Job job, RpcKind kind, std::span<const std::byte> buffer) {
 	Frame frame;
 	PacketWriter writer;
 
 	writer
-		.write(request_id, job, kind)
+		.write(request_id)
+		.write(job)
+		.write(kind)
 		.write_bytes(buffer);
 
 	frame.header = MessageHeader{
@@ -79,18 +93,6 @@ RpcMessage<Job> read_message(Message message) {
 	validate_rpc_message(rpc_message);
 
 	return rpc_message;
-} // namespace Rpc
-
-template <typename Job>
-void validate_message(const Message &message) {
-	if (message.header.magic != HEADER_MAGIC) throw std::runtime_error("Magic doesn't match");
-	if (message.header.type != RpcTraits<Job>::message_type) throw std::runtime_error("Rpc has wrong protocol type");
-	if (message.header.length != message.buffer.size()) throw std::runtime_error("RPC message length mismatch");
-}
-
-template <typename Job>
-void validate_rpc_message(const RpcMessage<Job> &message) {
-	if (message.kind != RpcKind::Request && message.kind != RpcKind::Response) throw std::runtime_error("Invalid Rpc kind");
 }
 
 } // namespace Rpc

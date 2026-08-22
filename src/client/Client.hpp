@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-enum ClientError : std::uint8_t {
+enum class ClientError : std::uint8_t {
 	AlreadyExists,
 	ServerError,
 	BadResponse,
@@ -49,6 +49,7 @@ class Client {
 	std::uint64_t next_id();
 	std::uint64_t current_id_ = 0;
 
+	Endpoint self_;
 	Network<NodeRole::CLIENT> network_;
 
 	std::optional<NodeId> leader_;

@@ -29,12 +29,17 @@ CreateFileRequest ClientProtocol::decode_create_file_request(const ClientRpcMess
 
 	return CreateFileRequest{
 		.path = std::move(path),
-		.message = std::move(message)
+		.context = {
+			.request_id = message.rpc_header.request_id,
+			.sender = message.sender,
+		}
 	};
 }
 
 Frame ClientProtocol::encode_create_file_response(std::uint64_t request_id, const CreateFileResponse &response) {
 	PacketWriter writer{};
+
+	writer.write(response.status);
 
 	return Rpc::make_frame(
 		request_id,
@@ -48,8 +53,13 @@ CreateFileResponse ClientProtocol::decode_create_file_response(const ClientRpcMe
 	PacketReader reader{ message.body };
 
 	// Implement
+	auto status = reader.read<ClientStatus>();
 
-	return CreateFileResponse{};
+	reader.assert_at_end();
+
+	return CreateFileResponse{
+		.status = status
+	};
 }
 
 LeaderHintResponse ClientProtocol::decode_leader_hint_response(const ClientRpcMessage &message) {
