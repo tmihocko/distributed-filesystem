@@ -113,6 +113,7 @@ class PacketReader {
 
 	std::size_t remaining() const noexcept;
 	bool at_end() const noexcept;
+	void assert_at_end() const;
 
   private:
 	std::span<const std::byte> data_;

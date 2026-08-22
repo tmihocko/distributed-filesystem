@@ -25,8 +25,8 @@ ClientOperation<void> Client::create_file(std::string path) {
 		network_.broadcast(NodeRole::METADATA, frame);
 	}
 
-	// This should run syncronously, since client side is single-threaded, we can just receive the next i believe
-	// Double check
+	// This should run syncronously, since client side is single-threaded,
+	// we can just receive the next message since metadata nodes only respond to client
 	Message response = network_.receive();
 
 	if (response.header.type != MessageType::CLIENT_RPC) return std::unexpected(ClientError::BadResponse);

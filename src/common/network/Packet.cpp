@@ -42,3 +42,7 @@ std::size_t PacketReader::remaining() const noexcept {
 bool PacketReader::at_end() const noexcept {
 	return offset_ == data_.size();
 }
+
+void PacketReader::assert_at_end() const {
+	if (!at_end()) throw std::runtime_error("Data not at end");
+}

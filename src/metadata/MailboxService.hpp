@@ -21,13 +21,16 @@ class SpecificRpc : public RpcService<SpecificEvent, SpecificRpc> {
 ```
 
 */
+
+#ifndef MAILBOXSERVICE_HPP
+#define MAILBOXSERVICE_HPP
 #include "rpc/Rpc.hpp"
 #include "util/BlockingQueue.hpp"
 #include <type_traits>
 #include <variant>
 
 template <typename EventType, typename Derived>
-class RpcService {
+class MailboxService {
   public:
 	void post(EventType event) {
 		queue_.push(std::move(event));
@@ -55,3 +58,5 @@ class RpcService {
   protected:
 	BlockingQueue<EventType> queue_;
 };
+
+#endif // MAILBOXSERVICE_HPP

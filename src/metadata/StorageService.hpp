@@ -1,12 +1,12 @@
 #ifndef STORAGERPC_HPP
 #define STORAGERPC_HPP
 #include <variant>
-#include "ClientRpc.hpp"
 #include "rpc/StorageProtocol.hpp"
+#include "MailboxService.hpp"
 
 using StorageEvent = std::variant<StorageRpcMessage, Stop>;
 
-class StorageRpc : public RpcService<StorageEvent, StorageRpc> {
+class StorageService : public MailboxService<StorageEvent, StorageService> {
   public:
   private:
 };

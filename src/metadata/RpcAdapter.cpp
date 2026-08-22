@@ -1,0 +1,21 @@
+#include "RpcAdapter.hpp"
+#include "ClientService.hpp"
+#include "rpc/ClientProtocol.hpp"
+#include <cassert>
+#include <stdexcept>
+
+ClientEvent decode(ClientRpcMessage message) {
+	assert(message.rpc_header.kind != RpcKind::Response); // Client cannot/should not respond to metadata
+
+	switch (message.rpc_header.job) {
+
+	case ClientJob::CREATE_FILE:
+		return ClientProtocol::decode_create_file_request(message);
+
+	case ClientJob::NOT_LEADER:
+		throw std::runtime_error("Client cannot send NOT_LEADER job.");
+
+	default:
+		throw std::runtime_error("Job type not handled.");
+	}
+}
