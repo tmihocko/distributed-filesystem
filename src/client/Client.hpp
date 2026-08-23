@@ -25,13 +25,14 @@ using ClientOperation = std::expected<T, ClientError>;
 
 class Client {
   public:
-	Client(Endpoint self, std::span<Endpoint> seed_nodes);
+	[[nodiscard]] Client(Endpoint self, std::span<const Endpoint> seed_nodes);
+	[[nodiscard]] Client(const std::string &config_file);
 
-	ClientOperation<void> connect(const std::vector<Endpoint> &seed_nodes);
+	// ClientOperation<void> connect(const std::vector<Endpoint> &seed_nodes);
 
 	ClientOperation<void> create_file(std::string path);
 
-	ClientOperation<std::vector<std::byte>> read_file(std::string path);
+	ClientOperation<std::vector<std::byte>> read_file(std::string path, std::size_t byte_count);
 
 	ClientOperation<void> write_file(std::string path, std::span<const std::byte> contents);
 
@@ -44,6 +45,11 @@ class Client {
 	ClientOperation<void> rename(std::string old_path, std::string new_path);
 
 	ClientOperation<FileInfo> stat(std::string path);
+
+	Client(const Client &) = delete;
+	auto operator=(const Client &) = delete;
+	Client(Client &&) = delete;
+	auto operator=(Client &&) = delete;
 
   private:
 	std::uint64_t next_id();

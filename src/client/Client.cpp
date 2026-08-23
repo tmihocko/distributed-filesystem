@@ -5,9 +5,11 @@
 #include <cstdint>
 #include <expected>
 
-Client::Client(Endpoint self, std::span<Endpoint> seed_nodes) : self_(self), network_(self) {
+Client::Client(Endpoint self, std::span<const Endpoint> seed_nodes) : self_(self), network_(self) {
 	network_.start(seed_nodes);
 }
+
+Client::Client(const std::string &config_file) : Client(Node::get_node_info(config_file), Node::get_seed_nodes(config_file)) {}
 
 ClientOperation<void> Client::create_file(std::string path) {
 
@@ -68,7 +70,7 @@ ClientOperation<void> Client::create_file(std::string path) {
 	*/
 }
 
-ClientOperation<std::vector<std::byte>> Client::read_file(std::string path) {
+ClientOperation<std::vector<std::byte>> Client::read_file(std::string path, std::size_t byte_count) {
 	return std::unexpected(ClientError::NotImplemented);
 }
 
