@@ -1,43 +1,66 @@
 #include "MetadataStore.hpp"
 #include "Serializer.hpp"
-#include "Serializer.hpp"
-#include "Serializer.hpp"
 #include <expected>
+#include <filesystem>
 #include <fstream>
+#include <stdexcept>
 
 namespace fs = std::filesystem;
 
-MetadataStore::MetadataStore(const std::filesystem::path &directory) : directory_(directory) {
+MetadataStore::MetadataStore(const fs::path &directory) : directory_(directory) {
 	std::error_code ec;
 
-	std::filesystem::create_directories(directory_, ec);
+	fs::create_directories(directory_, ec);
 
-	if (ec || !std::filesystem::is_directory(directory_)) {
+	if (ec || !fs::is_directory(directory_)) {
 		throw std::runtime_error("Failed to initialize metadata directory");
 	}
 }
 
-std::expected<void, MetadataStoreError> MetadataStore::write_metadata_file(const std::filesystem::path &path, const FileMetadata &metadata) {
+std::expected<void, MetadataStoreError> MetadataStore::write_metadata_file(const fs::path &filename, const FileMetadata &metadata) {
 	BinaryWriter writer;
 
-	writer.write(metadata.size, metadata.replica_locations[0], metadata.replica_locations[1]);
-
-	std::ofstream file(path, std::ios::binary | std::ios::trunc);
-
-	if (!file) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+	writer.write(METADATA_MAGIC, METADATA_VERSION, metadata.size, metadata.obj_id, metadata.replica_locations[0], metadata.replica_locations[1]);
 
 	const std::streamsize length = writer.length();
 	auto data = writer.move_data();
+
+	const fs::path final_path = directory_ / filename; // fix rn it does like metadata/obj/.tmp
+
+	std::error_code ec;
+	fs::create_directories(final_path.parent_path(), ec);
+
+	if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+
+	fs::path temporary_path = final_path;
+	temporary_path += ".tmp";
+
+	std::ofstream file(temporary_path, std::ios::binary | std::ios::trunc);
+
+	if (!file) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
 
 	if (!file.write(reinterpret_cast<const char *>(data.data()), length)) {
 		return std::unexpected(MetadataStoreError::WRITE_FAILURE);
 	}
 
+	file.flush();
+	if (!file) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+
+	file.close();
+	if (!file) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+
+	// Atomic on posix (overwrite), can error on some windows versions
+	fs::rename(temporary_path, final_path, ec);
+
+	if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+
 	return {};
 }
 
-std::expected<FileMetadata, MetadataStoreError> MetadataStore::read_metadata_file(const std::filesystem::path &path) {
-	std::ifstream file(path, std::ios::binary | std::ios::ate);
+std::expected<FileMetadata, MetadataStoreError> MetadataStore::read_metadata_file(const fs::path &filename) {
+	const fs::path physical_path = directory_ / filename;
+
+	std::ifstream file(physical_path, std::ios::binary | std::ios::ate);
 	if (!file) return std::unexpected(MetadataStoreError::READ_FAILURE);
 
 	const auto size = file.tellg();
@@ -51,40 +74,65 @@ std::expected<FileMetadata, MetadataStoreError> MetadataStore::read_metadata_fil
 		return std::unexpected(MetadataStoreError::READ_FAILURE);
 	}
 
-	BinaryReader reader{ bytes };
+	try {
+		BinaryReader reader{ bytes };
 
-	const auto &[file_size, rep1, rep2] = reader.read<std::uint64_t, NodeId, NodeId>();
-	if (!reader.at_end()) return std::unexpected(MetadataStoreError::MALFORMED_FILE);
+		const auto &[magic, version, file_size, obj_id, rep1, rep2] = reader.read<std::uint8_t, std::uint8_t, std::uint64_t, std::string, NodeId, NodeId>();
+		if (magic != METADATA_MAGIC) return std::unexpected(MetadataStoreError::MALFORMED_FILE);
+		if (version != METADATA_VERSION) return std::unexpected(MetadataStoreError::WRONG_VERSION);
+		if (!reader.at_end()) return std::unexpected(MetadataStoreError::MALFORMED_FILE);
 
-	return FileMetadata{
-		.path = path,
-		.size = file_size,
-		.replica_locations = { rep1, rep2 },
-	};
+		return FileMetadata{
+			.path = filename,
+			.size = file_size,
+			.obj_id = obj_id,
+			.replica_locations = { rep1, rep2 },
+		};
+	} catch (const std::out_of_range &) {
+		return std::unexpected(MetadataStoreError::MALFORMED_FILE);
+	} catch (const std::runtime_error &) {
+		return std::unexpected(MetadataStoreError::MALFORMED_FILE);
+	}
 }
 
+// Only called during startup
 std::expected<void, MetadataStoreError> MetadataStore::load_from_storage() {
 	data_.clear();
 
 	std::error_code ec;
+	fs::recursive_directory_iterator it(directory_, ec);
+	const fs::recursive_directory_iterator end;
 
-	for (const auto &entry : fs::directory_iterator(directory_, ec)) {
+	if (ec) return std::unexpected(MetadataStoreError::READ_FAILURE);
+
+	while (it != end) {
+		const auto &entry = *it;
+
+		const bool is_regular = entry.is_regular_file(ec);
 		if (ec) return std::unexpected(MetadataStoreError::READ_FAILURE);
-		if (!entry.is_regular_file()) continue;
 
-		auto metadata = read_metadata_file(entry.path());
+		if (is_regular) {
+			const fs::path filename = entry.path().lexically_relative(directory_);
 
-		if (!metadata) return std::unexpected(metadata.error());
+			if (filename.extension() != ".tmp") {
+				auto metadata = read_metadata_file(filename);
+				if (!metadata) return std::unexpected(metadata.error());
 
-		data_.emplace(
-			entry.path().filename(),
-			std::move(*metadata));
+				const auto [_, inserted] = data_.emplace(filename, std::move(*metadata));
+				if (!inserted) return std::unexpected(MetadataStoreError::MALFORMED_FILE); // Overlapping names, idk if this is possible
+			}
+		}
+
+		it.increment(ec);
+		if (ec) return std::unexpected(MetadataStoreError::READ_FAILURE);
 	}
 
 	return {};
 }
 
-std::expected<FileMetadata, MetadataStoreError> MetadataStore::get_metadata(const std::filesystem::path &filename) {
+std::expected<FileMetadata, MetadataStoreError> MetadataStore::get_metadata(const fs::path &filename) {
+	if (!valid_filename(filename)) return std::unexpected(MetadataStoreError::INVALID_PATH);
+
 	auto it = data_.find(filename);
 
 	if (it == data_.end()) return std::unexpected(MetadataStoreError::NOT_FOUND);
@@ -93,23 +141,28 @@ std::expected<FileMetadata, MetadataStoreError> MetadataStore::get_metadata(cons
 }
 
 std::expected<void, MetadataStoreError> MetadataStore::add_metadata(
-	const std::filesystem::path &filename,
-	const FileMetadata &metadata) {
+	const fs::path &filename,
+	FileMetadata metadata) {
+	if (!valid_filename(filename)) return std::unexpected(MetadataStoreError::INVALID_PATH);
+
+	metadata.path = filename; // metadata is a copy btw
 	auto result = write_metadata_file(filename, metadata);
 
 	if (!result) return result;
 
-	data_[filename] = metadata;
+	data_.insert_or_assign(filename, std::move(metadata));
 
 	return {};
 }
 
-std::expected<void, MetadataStoreError> MetadataStore::remove_metadata(const std::filesystem::path &filename) {
-	const auto path = metadata_path(filename);
+std::expected<void, MetadataStoreError> MetadataStore::remove_metadata(const fs::path &filename) {
+	if (!valid_filename(filename)) return std::unexpected(MetadataStoreError::INVALID_PATH);
+
+	const auto path = directory_ / filename;
 
 	std::error_code ec;
 
-	if (!std::filesystem::remove(path, ec)) {
+	if (!fs::remove(path, ec)) {
 		if (ec) {
 			return std::unexpected(MetadataStoreError::WRITE_FAILURE);
 		} else {
@@ -120,4 +173,20 @@ std::expected<void, MetadataStoreError> MetadataStore::remove_metadata(const std
 	data_.erase(filename);
 
 	return {};
+}
+
+bool MetadataStore::valid_filename(const fs::path &filename) {
+	if (filename.empty() ||
+		filename.is_absolute() ||
+		filename.filename().empty() ||
+		filename.extension() == ".tmp" ||
+		filename != filename.lexically_normal()) {
+		return false;
+	}
+
+	for (const auto &component : filename) {
+		if (component == "." || component == "..") return false;
+	}
+
+	return true;
 }

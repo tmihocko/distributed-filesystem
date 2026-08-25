@@ -1,7 +1,6 @@
 #include "MetadataNode.hpp"
 #include "network/Node.hpp"
-#include "util/Yaml.hpp"
-#include "util/Yaml.hpp"
+#include "Yaml.hpp"
 #include <iostream>
 
 int main(int argc, const char *argv[]) {

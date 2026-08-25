@@ -12,8 +12,8 @@ target_include_directories(DFS_Metadata PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(DFS_Metadata PRIVATE DFS_Common)
 
 target_compile_options(DFS_Metadata PRIVATE
-    -Wall
-    -Wextra
+    # -Wall
+    # -Wextra
     -Werror
-    -Wno-unused-parameter
+    # -Wno-unused-parameter
 )

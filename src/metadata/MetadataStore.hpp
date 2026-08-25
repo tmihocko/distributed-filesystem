@@ -6,10 +6,14 @@
 #include <unordered_map>
 #include <expected>
 
+static constexpr std::uint8_t METADATA_MAGIC = 0x69;
+static constexpr std::uint8_t METADATA_VERSION = 0x01;
+
 struct FileMetadata {
 	std::filesystem::path path;
 
 	std::uint64_t size;
+	std::string obj_id; // Filename in storage node
 	std::array<NodeId, 2> replica_locations;
 };
 
@@ -19,6 +23,8 @@ enum class MetadataStoreError {
 	READ_FAILURE,
 	WRITE_FAILURE,
 	NOT_FOUND,
+	WRONG_VERSION,
+	INVALID_PATH,
 };
 
 class MetadataStore {
@@ -33,7 +39,7 @@ class MetadataStore {
 	std::expected<FileMetadata, MetadataStoreError> get_metadata(const std::filesystem::path &filename);
 
 	// Update RAM + persist this entry
-	std::expected<void, MetadataStoreError> add_metadata(const std::filesystem::path &filename, const FileMetadata &metadata);
+	std::expected<void, MetadataStoreError> add_metadata(const std::filesystem::path &filename, FileMetadata metadata);
 
 	std::expected<void, MetadataStoreError> remove_metadata(const std::filesystem::path &filename);
 
@@ -45,7 +51,7 @@ class MetadataStore {
 	[[nodiscard]]
 	std::expected<FileMetadata, MetadataStoreError> read_metadata_file(const std::filesystem::path &path);
 
-	std::filesystem::path metadata_path(const std::filesystem::path &filename);
+	bool valid_filename(const std::filesystem::path &filename);
 
 	std::filesystem::path directory_;
 	std::unordered_map<std::filesystem::path, FileMetadata> data_;

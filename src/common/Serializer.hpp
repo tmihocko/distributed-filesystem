@@ -1,3 +1,8 @@
+/**
+TODO:!
+
+Fix endianness of serialized bytes
+*/
 #ifndef SERIALIZER_HPP
 #define SERIALIZER_HPP
 #include <iterator>
@@ -15,7 +20,7 @@ class BinaryWriter {
 
 	template <BinarySerializable... Ts>
 		requires(sizeof...(Ts) > 1)
-	BinaryWriter write(const Ts &...values) {
+	BinaryWriter &write(const Ts &...values) {
 		(write(values), ...);
 		return *this;
 	}

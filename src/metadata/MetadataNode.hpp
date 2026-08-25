@@ -24,6 +24,7 @@ class MetadataNode {
 	NodeConfig config_;
 	Network<NodeRole::METADATA> network_;
 
+	MetadataStore store_;
 	StorageService storage_;
 	ClientService client_;
 

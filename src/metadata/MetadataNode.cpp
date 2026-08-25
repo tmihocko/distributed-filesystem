@@ -5,14 +5,22 @@
 #include "rpc/Rpc.hpp"
 #include "rpc/StorageProtocol.hpp"
 #include "rpc/RpcAdapter.hpp"
+#include <print>
+#include <stdexcept>
 
 MetadataNode::MetadataNode(
 	NodeConfig config,
 	std::span<const Endpoint> seed_nodes)
 	: config_(std::move(config)),
 	  network_(config_),
+	  store_("metadata/"),
 	  storage_(config_, network_),
-	  client_(config_, network_, storage_) {
+	  client_(config_, network_, storage_, store_) {
+	const auto expected = store_.load_from_storage();
+	if (!expected) {
+		std::println("MetadataStoreError: {}", static_cast<int>(expected.error()));
+		throw std::runtime_error("Failed to load metadata file");
+	}
 	network_.start(seed_nodes);
 }
 

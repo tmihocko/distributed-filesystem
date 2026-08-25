@@ -24,7 +24,7 @@ void BinaryWriter::assert_valid() const {
 }
 
 std::vector<std::byte> BinaryReader::read_bytes(std::size_t n) {
-	if (offset_ + n > data_.size()) {
+	if (offset_ > data_.size() || n > data_.size() - offset_) {
 		throw std::out_of_range("PacketReader::read_bytes: buffer underrun");
 	}
 	std::vector<std::byte> out(data_.begin() + offset_, data_.begin() + offset_ + n);
