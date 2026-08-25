@@ -12,7 +12,7 @@
 #include "asio/post.hpp"
 #include "network/Message.hpp"
 #include "network/Node.hpp"
-#include "network/Packet.hpp"
+#include "Serializer.hpp"
 #include "network/FrameIO.hpp"
 #include <ranges>
 
@@ -66,7 +66,7 @@ Message Network<SelfRole>::receive() {
 template <NodeRole SelfRole>
 template <typename Rep, typename Period>
 std::optional<Message> Network<SelfRole>::receive(std::chrono::duration<Rep, Period> timeout) {
-	return message_queue_.pop(timeout);
+	return message_queue_.pop_with_timeout(timeout);
 }
 
 template <NodeRole SelfRole>
@@ -214,19 +214,14 @@ void Network<SelfRole>::start_reading(ConnectionPtr connection) {
 
 template <NodeRole SelfRole>
 void Network<SelfRole>::handshake(ConnectionPtr connection) {
-	PacketWriter writer;
+	BinaryWriter writer;
 
 	const std::uint8_t has_endpoint = !self_.host.empty() && self_.port != 0;
 
-	writer
-		.write(SelfRole)
-		.write_string(self_.node_id)
-		.write(has_endpoint);
+	writer.write(SelfRole, self_.node_id, has_endpoint);
 
 	if (has_endpoint) {
-		writer
-			.write_string(self_.host)
-			.write(self_.port);
+		writer.write(self_.host, self_.port);
 	}
 
 	Frame hello_frame = {
@@ -256,7 +251,7 @@ void Network<SelfRole>::handshake(ConnectionPtr connection) {
 					}
 
 					try {
-						PacketReader reader{ frame->buffer };
+						BinaryReader reader{ frame->buffer };
 
 						const auto [role, id, has_endpoint] = reader.read<NodeRole, std::string, std::uint8_t>();
 

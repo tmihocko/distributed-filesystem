@@ -6,7 +6,6 @@ Client--Metadata RPC
 #ifndef CLIENTPROTOCOL_HPP
 #define CLIENTPROTOCOL_HPP
 #include <cstdint>
-#include <optional>
 #include "Rpc.hpp"
 #include "network/Node.hpp"
 
@@ -20,7 +19,7 @@ enum class ClientJob : std::uint8_t {
 	RENAME,
 	STAT,
 
-	NOT_LEADER = 0xFF, //
+	NOT_LEADER = 0xFF, // Client cannot send this
 };
 
 using ClientRpcMessage = RpcMessage<ClientJob>;
@@ -48,13 +47,7 @@ struct CreateFileRequest {
 };
 struct CreateFileResponse {
 	ClientStatus status;
-};
-
-struct LeaderHintRequest {
 	RequestContext context;
-};
-struct LeaderHintResponse {
-	std::optional<NodeId> leader_id;
 };
 
 namespace ClientProtocol {
@@ -64,9 +57,6 @@ CreateFileRequest decode_create_file_request(const ClientRpcMessage &message);
 
 Frame encode_create_file_response(std::uint64_t request_id, const CreateFileResponse &response);
 CreateFileResponse decode_create_file_response(const ClientRpcMessage &message);
-
-Frame encode_leader_hint_response(std::uint64_t request_id, const LeaderHintResponse &response);
-LeaderHintResponse decode_leader_hint_response(const ClientRpcMessage &message);
 
 } // namespace ClientProtocol
 

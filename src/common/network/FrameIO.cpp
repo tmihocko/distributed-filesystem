@@ -1,5 +1,5 @@
 #include "FrameIO.hpp"
-#include "Packet.hpp"
+#include "Serializer.hpp"
 #include "network/Message.hpp"
 #include <asio.hpp>
 #include <array>
@@ -15,7 +15,7 @@
 namespace {
 
 MessageHeader decode_header(std::span<const std::byte> bytes) {
-	PacketReader reader(bytes);
+	BinaryReader reader(bytes);
 
 	const auto [magic, payload_size, message_type] = reader.read<std::uint8_t, std::uint32_t, MessageType>();
 
@@ -41,15 +41,12 @@ std::vector<std::byte> encode_frame(const Frame &frame) {
 			"Frame payload exceeds maximum size.");
 	}
 
-	PacketWriter writer;
+	BinaryWriter writer;
 
 	// Serialize each field individually. Do not rely on struct padding.
 	writer
-		.write<std::uint8_t>(HEADER_MAGIC)
-		.write<std::uint32_t>(
-			static_cast<std::uint32_t>(
-				frame.buffer.size()))
-		.write<MessageType>(frame.header.type)
+		.write<std::uint8_t, std::uint32_t, MessageType>(
+			HEADER_MAGIC, static_cast<std::uint32_t>(frame.buffer.size()), frame.header.type)
 		.write_bytes(frame.buffer);
 
 	return writer.move_data();

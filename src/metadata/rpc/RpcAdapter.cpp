@@ -1,8 +1,7 @@
 #include "RpcAdapter.hpp"
 #include "ClientService.hpp"
-#include "RaftService.hpp"
 #include "rpc/ClientProtocol.hpp"
-#include "rpc/RaftProtocol.hpp"
+#include "rpc/Rpc.hpp"
 #include <cassert>
 #include <stdexcept>
 
@@ -23,9 +22,5 @@ ClientEvent RpcAdapter::decode(ClientRpcMessage message) {
 }
 
 StorageEvent RpcAdapter::decode(StorageRpcMessage message) {
-	throw std::runtime_error("Not implemented");
-}
-
-RaftEvent RpcAdapter::decode(RaftRpcMessage message) {
 	throw std::runtime_error("Not implemented");
 }

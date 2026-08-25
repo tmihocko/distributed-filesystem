@@ -1,11 +1,10 @@
-#include "Node.hpp"
-#include "yaml-cpp/exceptions.h"
-#include <cctype>
+#include "Yaml.hpp"
 #include <iostream>
-#include <yaml-cpp/yaml.h>
-#include <yaml-cpp/node/parse.h>
+#include <string>
+#include "network/Node.hpp"
+#include "yaml-cpp/yaml.h"
 
-constexpr NodeRole role_from_string(std::string str) {
+static NodeRole role_from_string(std::string str) {
 	if (str == "Client") {
 		return NodeRole::CLIENT;
 	} else if (str == "Metadata") {
@@ -17,11 +16,7 @@ constexpr NodeRole role_from_string(std::string str) {
 	}
 }
 
-std::string Endpoint::key() const {
-	return host + ":" + std::to_string(port);
-}
-
-Endpoint Node::get_node_info(const std::string &filename) {
+Endpoint Yaml::get_node_info(const std::string &filename) {
 	Endpoint info;
 
 	try {
@@ -37,9 +32,28 @@ Endpoint Node::get_node_info(const std::string &filename) {
 	}
 
 	return info;
-} // namespace get_node_info(conststd::string
+}
 
-std::vector<Endpoint> Node::get_seed_nodes(const std::string &filename) {
+NodeConfig Yaml::get_node_config(const std::string &filename) {
+	NodeConfig config;
+
+	try {
+		YAML::Node yaml = YAML::LoadFile(filename);
+
+		config.node_id = yaml["node"]["node_id"].as<std::string>();
+		config.role = role_from_string(yaml["node"]["role"].as<std::string>());
+		config.host = yaml["node"]["host"].as<std::string>();
+		config.port = yaml["node"]["port"].as<std::uint16_t>();
+		config.data_directory = yaml["node"]["data_dir"].as<std::string>();
+
+	} catch (const YAML::Exception &e) {
+		std::cerr << "YAML error: " << e.what() << "\n";
+	}
+
+	return config;
+}
+
+std::vector<Endpoint> Yaml::get_seed_nodes(const std::string &filename) {
 	std::vector<Endpoint> nodes;
 
 	try {

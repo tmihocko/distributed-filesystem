@@ -1,7 +1,7 @@
 #ifndef RPC_HPP
 #define RPC_HPP
 #include "network/Message.hpp"
-#include "network/Packet.hpp"
+#include "Serializer.hpp"
 #include <cstdint>
 #include <span>
 #include <stdexcept>
@@ -51,18 +51,18 @@ void validate_message(const Message &message) {
 
 template <typename Job>
 void validate_rpc_message(const RpcMessage<Job> &message) {
-	if (message.rpc_header.kind != RpcKind::Request && message.rpc_header.kind != RpcKind::Response) throw std::runtime_error("Invalid Rpc kind");
+	if (message.rpc_header.kind != RpcKind::Request && message.rpc_header.kind != RpcKind::Response) {
+		throw std::runtime_error("Invalid Rpc kind");
+	}
 }
 
 template <RpcJob Job>
 Frame make_frame(std::uint64_t request_id, Job job, RpcKind kind, std::span<const std::byte> buffer) {
 	Frame frame;
-	PacketWriter writer;
+	BinaryWriter writer;
 
 	writer
-		.write(request_id)
-		.write(job)
-		.write(kind)
+		.write(request_id, job, kind)
 		.write_bytes(buffer);
 
 	frame.header = MessageHeader{
@@ -79,7 +79,7 @@ Frame make_frame(std::uint64_t request_id, Job job, RpcKind kind, std::span<cons
 template <typename Job>
 RpcMessage<Job> read_message(Message message) {
 	validate_message<Job>(message);
-	PacketReader reader{ message.buffer };
+	BinaryReader reader{ message.buffer };
 
 	const auto [req_id, job, kind] = reader.read<std::uint64_t, Job, RpcKind>();
 

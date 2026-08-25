@@ -1,5 +1,5 @@
-#ifndef PACKET_HPP
-#define PACKET_HPP
+#ifndef SERIALIZER_HPP
+#define SERIALIZER_HPP
 #include <iterator>
 #include <span>
 #include <stdexcept>
@@ -8,18 +8,20 @@
 #include <vector>
 
 template <typename T>
-concept PacketSerializable = std::is_trivially_copyable_v<T> || std::is_same_v<std::string, T>;
-class PacketWriter {
+concept BinarySerializable = std::is_trivially_copyable_v<T> || std::is_same_v<std::string, T>;
+class BinaryWriter {
   public:
-	PacketWriter() = default;
+	BinaryWriter() = default;
 
-	template <PacketSerializable... Ts>
-	explicit PacketWriter(const Ts &...values) {
+	template <BinarySerializable... Ts>
+		requires(sizeof...(Ts) > 1)
+	BinaryWriter write(const Ts &...values) {
 		(write(values), ...);
+		return *this;
 	}
 
-	template <PacketSerializable T>
-	PacketWriter &write(const T &value) {
+	template <BinarySerializable T>
+	BinaryWriter &write(const T &value) {
 		if constexpr (std::is_same_v<std::string, T>) {
 			return write_string(value);
 		} else {
@@ -35,7 +37,7 @@ class PacketWriter {
 
 	// Writes until null terminator
 	// Includes null terminator in message, maybe remove that later, will see
-	PacketWriter &write_string(const std::string &value) {
+	BinaryWriter &write_string(const std::string &value) {
 		assert_valid();
 		const std::size_t byte_count = value.size() + 1;
 		const std::size_t old = buffer_.size();
@@ -46,7 +48,7 @@ class PacketWriter {
 		return *this;
 	}
 
-	PacketWriter &write_bytes(std::span<const std::byte> bytes) {
+	BinaryWriter &write_bytes(std::span<const std::byte> bytes) {
 		assert_valid();
 
 		buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
@@ -65,11 +67,11 @@ class PacketWriter {
 	bool valid_ = true;
 };
 
-class PacketReader {
+class BinaryReader {
   public:
-	PacketReader(std::span<const std::byte> bytes) : data_(bytes) {}
+	BinaryReader(std::span<const std::byte> bytes) : data_(bytes) {}
 
-	template <PacketSerializable T>
+	template <BinarySerializable T>
 	T read() {
 		if constexpr (std::is_same_v<std::string, T>) {
 			return read_string();
@@ -85,7 +87,7 @@ class PacketReader {
 		}
 	};
 
-	template <PacketSerializable... Ts>
+	template <BinarySerializable... Ts>
 		requires(sizeof...(Ts) > 1)
 	std::tuple<Ts...> read() {
 		return std::tuple<Ts...>{ read<Ts>()... };

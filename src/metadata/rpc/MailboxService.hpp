@@ -22,8 +22,8 @@ class SpecificRpc : public RpcService<SpecificEvent, SpecificRpc> {
 
 */
 
-#ifndef MAILBOXSERVICE_HPP
-#define MAILBOXSERVICE_HPP
+#ifndef MAILBOX_SERVICE_HPP
+#define MAILBOX_SERVICE_HPP
 #include "rpc/Rpc.hpp"
 #include "util/BlockingQueue.hpp"
 #include <type_traits>
@@ -59,4 +59,4 @@ class MailboxService {
 	BlockingQueue<EventType> queue_;
 };
 
-#endif // MAILBOXSERVICE_HPP
+#endif // MAILBOX_SERVICE_HPP

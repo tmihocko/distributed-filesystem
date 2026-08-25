@@ -4,10 +4,22 @@
 #include "Rpc.hpp"
 
 enum class StorageJob : std::uint8_t {
-	PUT_CHUNK,
-	GET_CHUNK,
-	DELETE_CHUNK,
-	HAS_CHUNK,
+	PUT,
+	GET,
+	DELETE,
+
+	// Exists? Size? checksum
+	STAT,
+
+	// file, generation, destination
+	// Send bytes to storage, that way metadata bandwidth doesnt bottleneck
+	COPY,
+
+	// What do i have
+	LIST,
+
+	// To metadata
+	HEARTBEAT,
 };
 
 using StorageRpcMessage = RpcMessage<StorageJob>;

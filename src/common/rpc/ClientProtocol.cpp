@@ -1,7 +1,6 @@
 #include "ClientProtocol.hpp"
-#include "network/Packet.hpp"
+#include "Serializer.hpp"
 #include "rpc/Rpc.hpp"
-#include <optional>
 #include <stdexcept>
 
 template <ClientJob job, RpcKind kind>
@@ -11,7 +10,9 @@ static void validate_request(const ClientRpcMessage &message) {
 }
 
 Frame ClientProtocol::encode_create_file_request(std::uint64_t request_id, const CreateFileRequest &request) {
-	PacketWriter writer{ request.path };
+	BinaryWriter writer;
+
+	writer.write(request.path);
 
 	return Rpc::make_frame(
 		request_id,
@@ -22,7 +23,7 @@ Frame ClientProtocol::encode_create_file_request(std::uint64_t request_id, const
 
 CreateFileRequest ClientProtocol::decode_create_file_request(const ClientRpcMessage &message) {
 	validate_request<ClientJob::CREATE_FILE, RpcKind::Request>(message);
-	PacketReader reader{ message.body };
+	BinaryReader reader{ message.body };
 	auto path = reader.read_string();
 
 	reader.assert_at_end();
@@ -37,7 +38,7 @@ CreateFileRequest ClientProtocol::decode_create_file_request(const ClientRpcMess
 }
 
 Frame ClientProtocol::encode_create_file_response(std::uint64_t request_id, const CreateFileResponse &response) {
-	PacketWriter writer{};
+	BinaryWriter writer;
 
 	writer.write(response.status);
 
@@ -49,44 +50,16 @@ Frame ClientProtocol::encode_create_file_response(std::uint64_t request_id, cons
 }
 
 CreateFileResponse ClientProtocol::decode_create_file_response(const ClientRpcMessage &message) {
-	validate_request<ClientJob::CREATE_FILE, RpcKind::Response>(message);
-	PacketReader reader{ message.body };
+	// validate_request<ClientJob::CREATE_FILE, RpcKind::Response>(message);
+	// BinaryReader reader{ message.body };
 
-	// Implement
-	auto status = reader.read<ClientStatus>();
+	// // Implement
+	// auto status = reader.read<ClientStatus>();
 
-	reader.assert_at_end();
+	// reader.assert_at_end();
 
-	return CreateFileResponse{
-		.status = status
-	};
-}
-
-LeaderHintResponse ClientProtocol::decode_leader_hint_response(const ClientRpcMessage &message) {
-	PacketReader reader{ message.body };
-
-	bool leader_known = reader.read<std::uint8_t>() == 1;
-
-	if (leader_known) {
-		auto leader_id = reader.read_string();
-		return LeaderHintResponse{ leader_id };
-	} else {
-		return LeaderHintResponse{ std::nullopt };
-	}
-}
-
-Frame ClientProtocol::encode_leader_hint_response(std::uint64_t request_id, const LeaderHintResponse &response) {
-	PacketWriter writer;
-
-	if (response.leader_id) {
-		writer.write<std::uint8_t>(1).write_string(*response.leader_id);
-	} else {
-		writer.write<std::uint8_t>(0);
-	}
-
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::NOT_LEADER,
-		RpcKind::Response,
-		writer.move_data());
+	// return CreateFileResponse{
+	// 	.status = status
+	// };
+	return {};
 }

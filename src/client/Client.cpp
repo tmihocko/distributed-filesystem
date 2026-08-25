@@ -2,6 +2,7 @@
 #include "network/Node.hpp"
 #include "rpc/ClientProtocol.hpp"
 #include "rpc/Rpc.hpp"
+#include "Yaml.hpp"
 #include <cstdint>
 #include <expected>
 
@@ -9,7 +10,7 @@ Client::Client(Endpoint self, std::span<const Endpoint> seed_nodes) : self_(self
 	network_.start(seed_nodes);
 }
 
-Client::Client(const std::string &config_file) : Client(Node::get_node_info(config_file), Node::get_seed_nodes(config_file)) {}
+Client::Client(const std::string &config_file) : Client(Yaml::get_node_info(config_file), Yaml::get_seed_nodes(config_file)) {}
 
 ClientOperation<void> Client::create_file(std::string path) {
 
@@ -43,17 +44,6 @@ ClientOperation<void> Client::create_file(std::string path) {
 
 		leader_ = rpc_message.sender.id; // Incase our network.send_to_one_of landed on the leader
 		return {};
-		break;
-	}
-	// This should be generalized to a update_leader(NodeId new_leader, std::function retry)
-	case ClientJob::NOT_LEADER: {
-		LeaderHintResponse response = ClientProtocol::decode_leader_hint_response(rpc_message);
-
-		if (!response.leader_id) return std::unexpected(ClientError::ServerError);
-
-		leader_ = std::move(response.leader_id);
-		return create_file(path); // retry
-
 		break;
 	}
 	default:

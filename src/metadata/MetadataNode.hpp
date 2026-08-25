@@ -3,28 +3,32 @@
 Owns network<Metadata>, routes all incoming messages onto Rpc dependencies
 
 */
-#ifndef METADATANODE_HPP
-#define METADATANODE_HPP
+#ifndef METADATA_NODE_HPP
+#define METADATA_NODE_HPP
 #include "network/Network.hpp"
 #include "network/Node.hpp"
-#include "RaftService.hpp"
-#include "ClientService.hpp"
-#include "StorageService.hpp"
+#include "rpc/ClientService.hpp"
+#include "rpc/StorageService.hpp"
 
 class MetadataNode {
   public:
-	MetadataNode(Endpoint self, std::span<Endpoint> seed_nodes);
+	MetadataNode(NodeConfig config, std::span<const Endpoint> seed_nodes);
 
 	void start();
 
+	void setup();
+
   private:
+	void dispatch_message(Message message);
+
+	NodeConfig config_;
 	Network<NodeRole::METADATA> network_;
 
-	RaftService raft_;
-	ClientService client_;
 	StorageService storage_;
+	ClientService client_;
 
-	bool running_;
+	bool running_ = false;
+	bool has_setup_ = false;
 };
 
 #endif // METADATANODE_HPP

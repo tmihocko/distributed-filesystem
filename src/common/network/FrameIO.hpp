@@ -1,5 +1,5 @@
-#ifndef FRAMEIO_HPP
-#define FRAMEIO_HPP
+#ifndef FRAME_IO_HPP
+#define FRAME_IO_HPP
 
 #include "network/Message.hpp"
 #include <asio.hpp>
@@ -18,4 +18,4 @@ void async_write_frame(asio::ip::tcp::socket &socket, Frame frame, WriteHandler 
 
 } // namespace FrameIO
 
-#endif // FRAMEIO_HPP
+#endif // FRAME_IO_HPP

@@ -22,6 +22,16 @@ class Network {
 		assert(self.role == SelfRole);
 	}
 
+	Network(NodeConfig self) {
+		self_ = Endpoint{
+			.node_id = self.node_id,
+			.role = self.role,
+			.host = self.host,
+			.port = self.port,
+		};
+		assert(self.role == SelfRole);
+	}
+
 	void start(std::span<const Endpoint> seed_nodes);
 
 	void send(NodeId node_id, Frame frame);
@@ -36,6 +46,11 @@ class Network {
 	auto nodes_of_role(NodeRole role);
 
 	static constexpr NodeRole self_role = SelfRole;
+
+	Network(const Network &) = delete;
+	auto operator=(const Network &) = delete;
+	Network(Network &&) = delete;
+	auto operator=(Network &&) = delete;
 
   private:
 	// By role

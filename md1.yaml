@@ -3,6 +3,7 @@ node:
   role: "Metadata"
   host: "127.0.0.1"
   port: 8000
+  data_dir: "./data/md1"
 
 seed_nodes:
   - node_id: "md2"
@@ -10,7 +11,7 @@ seed_nodes:
     host: "127.0.0.1"
     port: 8001
   - node_id: "cl1"
-    role: "Metadata"
+    role: "Client"
     host: "127.0.0.1"
     port: 8002
     

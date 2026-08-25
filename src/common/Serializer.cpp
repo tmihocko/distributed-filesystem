@@ -1,28 +1,29 @@
-#include "Packet.hpp"
+#include "Serializer.hpp"
 #include <cstddef>
 #include <span>
 #include <stdexcept>
 
-std::span<const std::byte> PacketWriter::data() {
+std::span<const std::byte> BinaryWriter::data() {
 	assert_valid();
 	return buffer_;
 }
 
-std::vector<std::byte> PacketWriter::move_data() {
+std::vector<std::byte> BinaryWriter::move_data() {
 	assert_valid();
 	valid_ = false;
 	return std::move(buffer_);
 }
 
-std::uint32_t PacketWriter::length() const {
+std::uint32_t BinaryWriter::length() const {
+	assert_valid();
 	return static_cast<std::uint32_t>(buffer_.size());
 }
 
-void PacketWriter::assert_valid() const {
+void BinaryWriter::assert_valid() const {
 	if (!valid_) throw std::logic_error("Writer has been consumed.");
 }
 
-std::vector<std::byte> PacketReader::read_bytes(std::size_t n) {
+std::vector<std::byte> BinaryReader::read_bytes(std::size_t n) {
 	if (offset_ + n > data_.size()) {
 		throw std::out_of_range("PacketReader::read_bytes: buffer underrun");
 	}
@@ -31,18 +32,18 @@ std::vector<std::byte> PacketReader::read_bytes(std::size_t n) {
 	return out;
 }
 
-std::vector<std::byte> PacketReader::read_remaining() {
+std::vector<std::byte> BinaryReader::read_remaining() {
 	return read_bytes(remaining());
 };
 
-std::size_t PacketReader::remaining() const noexcept {
+std::size_t BinaryReader::remaining() const noexcept {
 	return data_.size() - offset_;
 }
 
-bool PacketReader::at_end() const noexcept {
+bool BinaryReader::at_end() const noexcept {
 	return offset_ == data_.size();
 }
 
-void PacketReader::assert_at_end() const {
+void BinaryReader::assert_at_end() const {
 	if (!at_end()) throw std::runtime_error("Data not at end");
 }

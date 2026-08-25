@@ -1,5 +1,7 @@
 #include "MetadataNode.hpp"
 #include "network/Node.hpp"
+#include "util/Yaml.hpp"
+#include "util/Yaml.hpp"
 #include <iostream>
 
 int main(int argc, const char *argv[]) {
@@ -12,8 +14,8 @@ int main(int argc, const char *argv[]) {
 
 	std::string config_file = argv[1];
 
-	Endpoint self = Node::get_node_info(config_file);
-	std::vector<Endpoint> seed_nodes = Node::get_seed_nodes(config_file);
+	NodeConfig self = Yaml::get_node_config(config_file);
+	std::vector<Endpoint> seed_nodes = Yaml::get_seed_nodes(config_file);
 
 	MetadataNode metadata{ self, seed_nodes };
 
