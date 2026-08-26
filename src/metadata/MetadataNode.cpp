@@ -2,11 +2,11 @@
 #include "network/Message.hpp"
 #include "network/Node.hpp"
 #include "rpc/ClientProtocol.hpp"
-#include "ClientService.hpp"
+#include "workers/ClientService.hpp"
 #include "rpc/Rpc.hpp"
 #include "rpc/StorageProtocol.hpp"
 #include "RpcAdapter.hpp"
-#include "StorageService.hpp"
+#include "workers/StorageService.hpp"
 #include <print>
 #include <stdexcept>
 #include <stop_token>

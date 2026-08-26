@@ -1,21 +1,17 @@
 #ifndef CLIENT_SERVICE_HPP
 #define CLIENT_SERVICE_HPP
 #include "MetadataStore.hpp"
-#include "StorageService.hpp"
+#include "workers/StorageService.hpp"
 #include "network/Network.hpp"
 #include "network/Node.hpp"
 #include "rpc/ClientProtocol.hpp"
-#include <variant>
 
 using ClientEvent = std::variant<CreateFileRequest>;
 
 class ClientService {
   public:
+	// Metadata only operation
 	void handle(CreateFileRequest req) {
-		// do_stuff(path);
-		// Compute obj_id
-		// Find replica locations
-
 		FileMetadata metadata{
 			.path = req.path,
 			.size = 0,
@@ -23,12 +19,32 @@ class ClientService {
 			.replica_locations = { "", "" }, // Find
 		};
 
-		if (!store_.add_metadata(req.path, metadata)) {
-			network_.send(req.context.);
-			// send_server_error(node_id, request_id);
-			// return;
+		auto expected = store_.add_metadata(req.path, metadata);
+		ClientStatus status;
+
+		if (expected) {
+			status = ClientStatus::Success;
+		} else {
+			switch (expected.error()) {
+			case MetadataStoreError::INVALID_PATH:
+				status = ClientStatus::InputError;
+				break;
+			default:
+				status = ClientStatus::ServerError;
+			}
 		}
+
+		Frame frame = ClientProtocol::encode_create_file_response(
+			req.context.request_id,
+			CreateFileResponse{
+				.status = status,
+				.context = req.context,
+			});
+
+		network_.send(req.context.sender.id, std::move(frame));
 	}
+
+	void handle();
 
 	ClientService(const NodeConfig &config, Network<NodeRole::METADATA> &network, StorageService &storage, MetadataStore &store)
 		: config_(config),

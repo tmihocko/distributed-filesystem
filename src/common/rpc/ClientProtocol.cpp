@@ -63,3 +63,34 @@ CreateFileResponse ClientProtocol::decode_create_file_response(const ClientRpcMe
 	// };
 	return {};
 }
+
+Frame encode_list_request(std::uint64_t request_id, const ListRequest &request) {
+	BinaryWriter writer;
+
+	writer.write(request.directory);
+
+	return Rpc::make_frame(request_id, ClientJob::LIST, RpcKind::Request, writer.move_data());
+}
+ListRequest decode_list_request(const ClientRpcMessage &message) {
+	validate_request<ClientJob::LIST, RpcKind::Request>(message);
+
+	BinaryReader reader{ message.body };
+	auto directory = reader.read_string();
+
+	reader.assert_at_end();
+
+	return ListRequest{
+		.directory = std::move(directory),
+		.context = RequestContext{
+			.request_id = message.rpc_header.request_id,
+			.sender = message.sender,
+		}
+	};
+}
+
+Frame encode_list_response(std::uint64_t request_id, const ListResponse &response) {
+	return Frame{};
+}
+ListResponse decode_list_response(const ClientRpcMessage &message) {
+	return ListResponse{};
+}

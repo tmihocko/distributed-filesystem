@@ -25,39 +25,22 @@ ClientOperation<void> Client::create_file(std::string path) {
 
 	auto frame = ClientProtocol::encode_create_file_request(request_id, request);
 
-	if (leader_) {
-		network_.send(*leader_, frame);
-	} else {
-		// network_.send_to_one_of<NodeRole::Metadata>(frame);
-	}
+	network_.send(*leader_, frame);
 
 	auto message = network_.receive();
 	auto rpc_message = Rpc::read_message<ClientJob>(message);
 
 	if (rpc_message.rpc_header.request_id != request_id) return std::unexpected(ClientError::BadResponse);
 	if (rpc_message.rpc_header.kind != RpcKind::Response) return std::unexpected(ClientError::BadResponse);
+	if (rpc_message.rpc_header.job != ClientJob::CREATE_FILE) return std::unexpected(ClientError::BadResponse);
 
-	switch (rpc_message.rpc_header.job) {
-	case ClientJob::CREATE_FILE: {
-		CreateFileResponse response = ClientProtocol::decode_create_file_response(rpc_message);
-		if (response.status != ClientStatus::Success) return std::unexpected(ClientError::ServerError);
+	CreateFileResponse response = ClientProtocol::decode_create_file_response(rpc_message);
 
-		leader_ = rpc_message.sender.id; // Incase our network.send_to_one_of landed on the leader
+	if (response.status == ClientStatus::Success) {
 		return {};
-		break;
+	} else {
+		return std::unexpected(ClientError::ServerError);
 	}
-	default:
-		throw std::runtime_error("Unexpected job type");
-	}
-
-	/**
-	Big todos:
-	Integer endianness in packetserializers???
-
-	How can we make types explicit at compile time for response and requests of jobs ::(low priority, specialized RPC is still RPC internals)
-	ie, make it explicit in client and metadata node, that for CreateFile request a string is sent, for a CreateFile response a bool is sent
-
-	*/
 }
 
 ClientOperation<std::vector<std::byte>> Client::read_file(std::string path, std::size_t byte_count) {
@@ -72,8 +55,34 @@ ClientOperation<void> Client::remove(std::string path) {
 	return std::unexpected(ClientError::NotImplemented);
 }
 
-ClientOperation<std::vector<FileInfo>> Client::list(std::string path) {
-	return std::unexpected(ClientError::NotImplemented);
+ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
+	auto request_id = next_id();
+
+	ListRequest request{
+		.directory = directory,
+		.context = {
+			.request_id = request_id,
+			.sender = NodeIdentity{ self_.node_id, self_.role },
+		}
+	};
+
+	auto frame = ClientProtocol::encode_list_request(request_id, request);
+
+	network_.send(*leader_, std::move(frame));
+
+	auto message = network_.receive();
+	auto rpc_message = Rpc::read_message<ClientJob>(message);
+
+	if (rpc_message.rpc_header.request_id != request_id) return std::unexpected(ClientError::BadResponse);
+	if (rpc_message.rpc_header.kind != RpcKind::Response) return std::unexpected(ClientError::BadResponse);
+	if (rpc_message.rpc_header.job != ClientJob::LIST) return std::unexpected(ClientError::BadResponse);
+
+	ListResponse response = ClientProtocol::decode_list_response(rpc_message);
+
+	const auto begin = response.info_arr;
+	const auto end = response.info_arr + static_cast<std::size_t>(response.size);
+
+	return std::vector<FileInfo>(begin, end); // Copy data into
 }
 
 ClientOperation<void> Client::mkdir(std::string path) {
@@ -84,7 +93,7 @@ ClientOperation<void> Client::rename(std::string old_path, std::string new_path)
 	return std::unexpected(ClientError::NotImplemented);
 }
 
-ClientOperation<FileInfo> Client::stat(std::string path) {
+ClientOperation<FileStats> Client::stat(std::string path) {
 	return std::unexpected(ClientError::NotImplemented);
 }
 

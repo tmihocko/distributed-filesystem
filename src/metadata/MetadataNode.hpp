@@ -7,8 +7,8 @@ Owns network<Metadata>, routes all incoming messages onto Rpc dependencies
 #define METADATA_NODE_HPP
 #include "network/Network.hpp"
 #include "network/Node.hpp"
-#include "ClientService.hpp"
-#include "StorageService.hpp"
+#include "workers/ClientService.hpp"
+#include "workers/StorageService.hpp"
 #include "util/BlockingQueue.hpp"
 
 using Event = std::variant<ClientEvent, StorageEvent>;

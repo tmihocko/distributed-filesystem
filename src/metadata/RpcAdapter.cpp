@@ -1,5 +1,5 @@
 #include "RpcAdapter.hpp"
-#include "ClientService.hpp"
+#include "workers/ClientService.hpp"
 #include "rpc/ClientProtocol.hpp"
 #include "rpc/Rpc.hpp"
 #include <cassert>

@@ -22,6 +22,20 @@ enum class ClientJob : std::uint8_t {
 	NOT_LEADER = 0xFF, // Client cannot send this
 };
 
+enum class ClientError : std::uint8_t {
+	AlreadyExists,
+	ServerError,
+	BadResponse,
+	NotImplemented,
+};
+
+struct FileInfo {
+	std::string path;
+	bool is_directory;
+};
+
+struct FileStats {};
+
 using ClientRpcMessage = RpcMessage<ClientJob>;
 using ClientRpcHeader = RpcHeader<ClientJob>;
 
@@ -32,7 +46,7 @@ struct RpcTraits<ClientJob> {
 
 enum class ClientStatus : std::uint8_t {
 	Success = 0,
-
+	ServerError = 1,
 	InputError = 2,
 };
 
@@ -50,6 +64,16 @@ struct CreateFileResponse {
 	RequestContext context;
 };
 
+struct ListRequest {
+	std::string directory;
+	RequestContext context;
+};
+
+struct ListResponse {
+	std::uint32_t size;
+	FileInfo *info_arr;
+};
+
 namespace ClientProtocol {
 
 Frame encode_create_file_request(std::uint64_t request_id, const CreateFileRequest &request);
@@ -57,6 +81,12 @@ CreateFileRequest decode_create_file_request(const ClientRpcMessage &message);
 
 Frame encode_create_file_response(std::uint64_t request_id, const CreateFileResponse &response);
 CreateFileResponse decode_create_file_response(const ClientRpcMessage &message);
+
+Frame encode_list_request(std::uint64_t request_id, const ListRequest &response);
+ListRequest decode_list_request(const ClientRpcMessage &message);
+
+Frame encode_list_response(std::uint64_t request_id, const ListResponse &response);
+ListResponse decode_list_response(const ClientRpcMessage &message);
 
 } // namespace ClientProtocol
 

@@ -1,3 +1,7 @@
+/**
+
+TODO: leader_ is still here after removing raft, store metadata address/id and use that instead
+*/
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 #include "network/Network.hpp"
@@ -6,19 +10,7 @@
 #include <span>
 #include <string>
 #include <vector>
-
-enum class ClientError : std::uint8_t {
-	AlreadyExists,
-	ServerError,
-	BadResponse,
-	NotImplemented,
-};
-
-struct FileInfo {
-	std::string path;
-	bool is_directory = false;
-	std::uint64_t size = 0;
-};
+#include "rpc/ClientProtocol.hpp"
 
 template <typename T>
 using ClientOperation = std::expected<T, ClientError>;
@@ -38,13 +30,13 @@ class Client {
 
 	ClientOperation<void> remove(std::string path);
 
-	ClientOperation<std::vector<FileInfo>> list(std::string path = "/");
+	ClientOperation<std::vector<FileInfo>> list(std::string directory = "/");
 
 	ClientOperation<void> mkdir(std::string path);
 
 	ClientOperation<void> rename(std::string old_path, std::string new_path);
 
-	ClientOperation<FileInfo> stat(std::string path);
+	ClientOperation<FileStats> stat(std::string path);
 
 	Client(const Client &) = delete;
 	auto operator=(const Client &) = delete;
