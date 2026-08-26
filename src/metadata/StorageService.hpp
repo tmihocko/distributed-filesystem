@@ -4,15 +4,14 @@
 #include "network/Network.hpp"
 #include "network/Node.hpp"
 #include "rpc/StorageProtocol.hpp"
-#include "MailboxService.hpp"
 
-using StorageEvent = std::variant<StorageRpcMessage, Stop>;
+using StorageEvent = std::variant<StorageRpcMessage>;
 
-class StorageService : public MailboxService<StorageEvent, StorageService> {
+class StorageService {
   public:
-	StorageService(
-		const NodeConfig &config,
-		Network<NodeRole::METADATA> &network)
+	void handle(StorageRpcMessage msg); // placegholder
+
+	StorageService(const NodeConfig &config, Network<NodeRole::METADATA> &network)
 		: config_(config),
 		  network_(network) {}
 

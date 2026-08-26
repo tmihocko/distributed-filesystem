@@ -1,17 +1,15 @@
 #ifndef CLIENT_SERVICE_HPP
 #define CLIENT_SERVICE_HPP
-#include "MailboxService.hpp"
 #include "MetadataStore.hpp"
 #include "StorageService.hpp"
 #include "network/Network.hpp"
 #include "network/Node.hpp"
 #include "rpc/ClientProtocol.hpp"
-#include "rpc/Rpc.hpp"
 #include <variant>
 
-using ClientEvent = std::variant<CreateFileRequest, Stop>;
+using ClientEvent = std::variant<CreateFileRequest>;
 
-class ClientService : public MailboxService<ClientEvent, ClientService> {
+class ClientService {
   public:
 	void handle(CreateFileRequest req) {
 		// do_stuff(path);
@@ -26,15 +24,13 @@ class ClientService : public MailboxService<ClientEvent, ClientService> {
 		};
 
 		if (!store_.add_metadata(req.path, metadata)) {
+			network_.send(req.context.);
 			// send_server_error(node_id, request_id);
 			// return;
 		}
 	}
 
-	ClientService(
-		const NodeConfig &config,
-		Network<NodeRole::METADATA> &network,
-		StorageService &storage, MetadataStore &store)
+	ClientService(const NodeConfig &config, Network<NodeRole::METADATA> &network, StorageService &storage, MetadataStore &store)
 		: config_(config),
 		  network_(network),
 		  storage_(storage),

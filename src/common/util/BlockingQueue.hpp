@@ -1,3 +1,6 @@
+/**
+MPMC queue that blocks thread when on pop() when empty
+*/
 #ifndef BLOCKINGQUEUE_HPP
 #define BLOCKINGQUEUE_HPP
 

@@ -7,8 +7,6 @@
 #include <stdexcept>
 #include <type_traits>
 
-struct Stop {}; // Strongly typed command for Metadata RPC, I put it here beacuse cyclic-dependency issue
-
 enum class RpcKind : std::uint8_t {
 	Response,
 	Request
