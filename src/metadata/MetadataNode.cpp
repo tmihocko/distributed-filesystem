@@ -18,7 +18,7 @@ MetadataNode::MetadataNode(
 	std::span<const Endpoint> seed_nodes)
 	: config_(std::move(config)),
 	  network_(config_),
-	  store_("metadata/"),
+	  store_(config_.data_directory),
 	  storage_(config_, network_),
 	  client_(config_, network_, storage_, store_) {
 	const auto expected = store_.load_from_storage();

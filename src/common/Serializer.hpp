@@ -29,6 +29,8 @@ class BinaryWriter {
 	BinaryWriter &write(const T &value) {
 		if constexpr (std::is_same_v<std::string, T>) {
 			return write_string(value);
+		} else if constexpr (std::is_same_v<bool, T>) {
+			return write<std::uint8_t>(value ? 1 : 0);
 		} else {
 			assert_valid();
 
@@ -80,6 +82,8 @@ class BinaryReader {
 	T read() {
 		if constexpr (std::is_same_v<std::string, T>) {
 			return read_string();
+		} else if constexpr (std::is_same_v<bool, T>) {
+			return read<std::uint8_t>() == 1;
 		} else {
 			if (offset_ > data_.size() || sizeof(T) > data_.size() - offset_) {
 				throw std::out_of_range("PacketReader buffer underrun");

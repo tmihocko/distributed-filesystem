@@ -3,6 +3,8 @@ build/
 .ccls-cache/
 .vscode/
 bin/
+metadata/
+tmp/
 
 .DS_STORE
 

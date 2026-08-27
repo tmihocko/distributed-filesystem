@@ -19,7 +19,6 @@ enum class ClientJob : std::uint8_t {
 	RENAME,
 	STAT,
 
-	NOT_LEADER = 0xFF, // Client cannot send this
 };
 
 enum class ClientError : std::uint8_t {
@@ -48,11 +47,20 @@ enum class ClientStatus : std::uint8_t {
 	Success = 0,
 	ServerError = 1,
 	InputError = 2,
+	AlreadyExists = 3,
 };
 
 struct RequestContext {
 	std::uint64_t request_id;
 	NodeIdentity sender;
+
+	template <typename T>
+	static RequestContext from(const RpcMessage<T> &message) {
+		return RequestContext{
+			.request_id = message.rpc_header.request_id,
+			.sender = message.sender,
+		};
+	}
 };
 
 struct CreateFileRequest {
@@ -65,13 +73,14 @@ struct CreateFileResponse {
 };
 
 struct ListRequest {
-	std::string directory;
+	std::string path;
 	RequestContext context;
 };
 
+// Rpc messages have uint32 size before
 struct ListResponse {
-	std::uint32_t size;
-	FileInfo *info_arr;
+	std::vector<FileInfo> info_vec;
+	RequestContext context;
 };
 
 namespace ClientProtocol {
@@ -81,6 +90,8 @@ CreateFileRequest decode_create_file_request(const ClientRpcMessage &message);
 
 Frame encode_create_file_response(std::uint64_t request_id, const CreateFileResponse &response);
 CreateFileResponse decode_create_file_response(const ClientRpcMessage &message);
+
+//
 
 Frame encode_list_request(std::uint64_t request_id, const ListRequest &response);
 ListRequest decode_list_request(const ClientRpcMessage &message);

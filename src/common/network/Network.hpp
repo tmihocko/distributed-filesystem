@@ -85,6 +85,7 @@ class Network {
 	Endpoint self_;
 	std::unordered_map<NodeId, ConnectionPtr> connections_;
 	std::unordered_set<ConnectionPtr> pending_connections_;
+	std::unordered_map<NodeId, std::deque<Frame>> pending_frames_; // Frames passed by send() before connections with node id has been made
 };
 
 #ifndef NETWORK_TPP

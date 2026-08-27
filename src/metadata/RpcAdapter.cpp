@@ -13,8 +13,8 @@ ClientEvent RpcAdapter::decode(ClientRpcMessage message) {
 	case ClientJob::CREATE_FILE:
 		return ClientProtocol::decode_create_file_request(message);
 
-	case ClientJob::NOT_LEADER:
-		throw std::runtime_error("Client cannot send NOT_LEADER job.");
+	case ClientJob::LIST:
+		return ClientProtocol::decode_list_request(message);
 
 	default:
 		throw std::runtime_error("Job type not handled.");

@@ -1,6 +1,7 @@
 #ifndef LOGSTORE_HPP
 #define LOGSTORE_HPP
 #include "network/Node.hpp"
+#include "rpc/ClientProtocol.hpp"
 #include <array>
 #include <filesystem>
 #include <unordered_map>
@@ -25,6 +26,7 @@ enum class MetadataStoreError {
 	NOT_FOUND,
 	WRONG_VERSION,
 	INVALID_PATH,
+	ALREADY_EXISTS,
 };
 
 class MetadataStore {
@@ -42,6 +44,9 @@ class MetadataStore {
 	std::expected<void, MetadataStoreError> add_metadata(const std::filesystem::path &filename, FileMetadata metadata);
 
 	std::expected<void, MetadataStoreError> remove_metadata(const std::filesystem::path &filename);
+
+	[[nodiscard]]
+	std::expected<std::vector<FileInfo>, MetadataStoreError> list(const std::filesystem::path &path);
 
   private:
 	// Add to disk

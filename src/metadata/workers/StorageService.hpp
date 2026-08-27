@@ -9,7 +9,7 @@ using StorageEvent = std::variant<StorageRpcMessage>;
 
 class StorageService {
   public:
-	void handle(StorageRpcMessage msg); // placegholder
+	void handle(StorageRpcMessage msg) {} // placegholder
 
 	StorageService(const NodeConfig &config, Network<NodeRole::METADATA> &network)
 		: config_(config),

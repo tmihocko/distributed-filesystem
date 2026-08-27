@@ -50,7 +50,7 @@ class Client {
 	Endpoint self_;
 	Network<NodeRole::CLIENT> network_;
 
-	std::optional<NodeId> leader_;
+	NodeId metadata_node_id_;
 };
 
 #endif // CLIENT_HPP

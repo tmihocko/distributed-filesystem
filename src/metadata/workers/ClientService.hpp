@@ -6,7 +6,7 @@
 #include "network/Node.hpp"
 #include "rpc/ClientProtocol.hpp"
 
-using ClientEvent = std::variant<CreateFileRequest>;
+using ClientEvent = std::variant<CreateFileRequest, ListRequest>;
 
 class ClientService {
   public:
@@ -20,19 +20,7 @@ class ClientService {
 		};
 
 		auto expected = store_.add_metadata(req.path, metadata);
-		ClientStatus status;
-
-		if (expected) {
-			status = ClientStatus::Success;
-		} else {
-			switch (expected.error()) {
-			case MetadataStoreError::INVALID_PATH:
-				status = ClientStatus::InputError;
-				break;
-			default:
-				status = ClientStatus::ServerError;
-			}
-		}
+		ClientStatus status = get_client_status(expected);
 
 		Frame frame = ClientProtocol::encode_create_file_response(
 			req.context.request_id,
@@ -44,7 +32,29 @@ class ClientService {
 		network_.send(req.context.sender.id, std::move(frame));
 	}
 
-	void handle();
+	void handle(ListRequest req) {
+		auto expected = store_.list(req.path);
+		ClientStatus status = get_client_status(expected);
+
+		Frame frame;
+
+		if (status == ClientStatus::Success) {
+			frame = ClientProtocol::encode_list_response(
+				req.context.request_id,
+				ListResponse{
+					.info_vec = std::move(expected.value()),
+				});
+		} else {
+			frame = ClientProtocol::encode_list_response(
+				req.context.request_id,
+				ListResponse{
+					// Unused empty vector, need this because i dont want rpc stuff to be super verbose
+					.info_vec = std::vector<FileInfo>(0),
+				});
+		}
+
+		network_.send(req.context.sender.id, std::move(frame));
+	}
 
 	ClientService(const NodeConfig &config, Network<NodeRole::METADATA> &network, StorageService &storage, MetadataStore &store)
 		: config_(config),
@@ -53,6 +63,22 @@ class ClientService {
 		  store_(store) {}
 
   private:
+	template <typename T>
+	ClientStatus get_client_status(const std::expected<T, MetadataStoreError> &expected) {
+		if (expected) {
+			return ClientStatus::Success;
+		} else {
+			switch (expected.error()) {
+			case MetadataStoreError::INVALID_PATH:
+				return ClientStatus::InputError;
+			case MetadataStoreError::ALREADY_EXISTS:
+				return ClientStatus::AlreadyExists;
+			default:
+				return ClientStatus::ServerError;
+			}
+		}
+	}
+
 	NodeConfig config_;
 	Network<NodeRole::METADATA> &network_;
 	StorageService &storage_;

@@ -1,6 +1,8 @@
 /**
 
-Owns network<Metadata>, routes all incoming messages onto Rpc dependencies
+Owns network<Metadata>, routes all incoming messages onto Rpc dependencies,
+
+Basically the leader object of everything in this process
 
 */
 #ifndef METADATA_NODE_HPP

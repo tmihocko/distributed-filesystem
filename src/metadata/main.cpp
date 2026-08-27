@@ -19,6 +19,9 @@ int main(int argc, const char *argv[]) {
 	MetadataNode metadata{ self, seed_nodes };
 
 	metadata.start();
+
+	while (true) {
+	}
 }
 
 /**

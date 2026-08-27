@@ -8,8 +8,4 @@ seed_nodes:
   - node_id: "md1"
     role: "Metadata"
     host: "127.0.0.1"
-    port: 8000,
-  - node_id: "md2"
-    role: "Metadata"
-    host: "127.0.0.1"
-    port: 8001
+    port: 8000

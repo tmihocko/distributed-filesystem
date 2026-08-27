@@ -8,6 +8,12 @@
 
 Client::Client(Endpoint self, std::span<const Endpoint> seed_nodes) : self_(self), network_(self) {
 	network_.start(seed_nodes);
+	for (const auto &node : seed_nodes) {
+		if (node.role == NodeRole::METADATA) {
+			metadata_node_id_ = node.node_id;
+			return;
+		}
+	}
 }
 
 Client::Client(const std::string &config_file) : Client(Yaml::get_node_info(config_file), Yaml::get_seed_nodes(config_file)) {}
@@ -25,7 +31,7 @@ ClientOperation<void> Client::create_file(std::string path) {
 
 	auto frame = ClientProtocol::encode_create_file_request(request_id, request);
 
-	network_.send(*leader_, frame);
+	network_.send(metadata_node_id_, frame);
 
 	auto message = network_.receive();
 	auto rpc_message = Rpc::read_message<ClientJob>(message);
@@ -59,7 +65,7 @@ ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
 	auto request_id = next_id();
 
 	ListRequest request{
-		.directory = directory,
+		.path = directory,
 		.context = {
 			.request_id = request_id,
 			.sender = NodeIdentity{ self_.node_id, self_.role },
@@ -68,7 +74,7 @@ ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
 
 	auto frame = ClientProtocol::encode_list_request(request_id, request);
 
-	network_.send(*leader_, std::move(frame));
+	network_.send(metadata_node_id_, std::move(frame));
 
 	auto message = network_.receive();
 	auto rpc_message = Rpc::read_message<ClientJob>(message);
@@ -77,12 +83,7 @@ ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
 	if (rpc_message.rpc_header.kind != RpcKind::Response) return std::unexpected(ClientError::BadResponse);
 	if (rpc_message.rpc_header.job != ClientJob::LIST) return std::unexpected(ClientError::BadResponse);
 
-	ListResponse response = ClientProtocol::decode_list_response(rpc_message);
-
-	const auto begin = response.info_arr;
-	const auto end = response.info_arr + static_cast<std::size_t>(response.size);
-
-	return std::vector<FileInfo>(begin, end); // Copy data into
+	return ClientProtocol::decode_list_response(rpc_message).info_vec;
 }
 
 ClientOperation<void> Client::mkdir(std::string path) {

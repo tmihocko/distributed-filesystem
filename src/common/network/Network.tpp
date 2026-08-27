@@ -15,6 +15,7 @@
 #include "Serializer.hpp"
 #include "network/FrameIO.hpp"
 #include <ranges>
+#include <execinfo.h>
 
 template <NodeRole SelfRole>
 void Network<SelfRole>::start(std::span<const Endpoint> seed_nodes) {
@@ -36,10 +37,14 @@ void Network<SelfRole>::start(std::span<const Endpoint> seed_nodes) {
 
 template <NodeRole SelfRole>
 void Network<SelfRole>::send(NodeId node_id, Frame frame) {
-	asio::post(context_, [this, node_id = std::move(node_id), frame = std::move(frame)]() mutable {
+	asio::post(context_, [this, node_id = std::move(node_id), frame = std::move(frame)]() {
 		auto it = connections_.find(node_id);
 
-		if (it == connections_.end()) return;
+		if (it == connections_.end()) {
+			pending_frames_[node_id].push_back(std::move(frame));
+
+			return;
+		}
 
 		it->second->enqueue_write(std::move(frame));
 	});
@@ -174,6 +179,15 @@ void Network<SelfRole>::register_connection(ConnectionPtr connection, NodeIdenti
 	pending_connections_.erase(connection);
 	connections_.insert_or_assign(remote.id, connection);
 
+	// flush pending frames
+	auto pending = pending_frames_.find(connection->remote->id);
+	if (pending != pending_frames_.end()) {
+		for (const auto &frame : pending->second) {
+			connection->enqueue_write(std::move(frame));
+		}
+		pending_frames_.erase(pending);
+	}
+
 	start_reading(connection);
 }
 
@@ -207,7 +221,6 @@ void Network<SelfRole>::start_reading(ConnectionPtr connection) {
 				.header = frame->header,
 				.buffer = std::move(frame->buffer),
 			});
-
 			start_reading(connection);
 		});
 }
@@ -253,7 +266,7 @@ void Network<SelfRole>::handshake(ConnectionPtr connection) {
 					try {
 						BinaryReader reader{ frame->buffer };
 
-						const auto [role, id, has_endpoint] = reader.read<NodeRole, std::string, std::uint8_t>();
+						const auto [role, id, has_endpoint] = reader.read<NodeRole, std::string, bool>();
 
 						const bool valid_role =
 							role == NodeRole::CLIENT ||
@@ -270,7 +283,7 @@ void Network<SelfRole>::handshake(ConnectionPtr connection) {
 
 						std::optional<Endpoint> endpoint;
 
-						if (has_endpoint == 1) {
+						if (has_endpoint) {
 							const auto [host, port] = reader.read<std::string, std::uint16_t>();
 
 							if (host.empty() || port == 0) {
