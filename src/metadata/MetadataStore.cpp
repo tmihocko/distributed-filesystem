@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <system_error>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -209,14 +210,36 @@ bool MetadataStore::valid_filename(const fs::path &filename) {
 	return true;
 }
 
-std::expected<std::vector<FileInfo>, MetadataStoreError> MetadataStore::list(const fs::path &path) {
-	std::vector<FileInfo> list;
+std::expected<void, MetadataStoreError> MetadataStore::make_directory(const fs::path &path) {
+	if (!valid_filename(path)) return std::unexpected(MetadataStoreError::INVALID_PATH);
 
 	const auto final_path = directory_ / path.relative_path();
 
-	if (!fs::exists(final_path) || !fs::is_directory(final_path)) return std::unexpected(MetadataStoreError::INVALID_PATH);
+	std::error_code ec;
+	const bool created = fs::create_directory(final_path, ec);
 
-	for (const auto &entry : fs::directory_iterator(final_path)) {
+	if (ec == std::errc::no_such_file_or_directory || ec == std::errc::not_a_directory) {
+		return std::unexpected(MetadataStoreError::INVALID_PATH);
+	} else if (ec) {
+		return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+	}
+
+	if (!created) return std::unexpected(MetadataStoreError::ALREADY_EXISTS);
+
+	return {};
+}
+
+std::expected<std::vector<FileInfo>, MetadataStoreError> MetadataStore::list(const fs::path &path) {
+	std::vector<FileInfo> list;
+	std::error_code ec;
+
+	const auto final_path = directory_ / path.relative_path();
+
+	if (!fs::exists(final_path, ec) || !fs::is_directory(final_path, ec)) return std::unexpected(MetadataStoreError::INVALID_PATH);
+	if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+
+	for (const auto &entry : fs::directory_iterator(final_path, ec)) {
+		if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
 		list.emplace_back(entry.path().filename(), entry.is_directory());
 	}
 

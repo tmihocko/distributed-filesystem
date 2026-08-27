@@ -87,7 +87,7 @@ ListRequest ClientProtocol::decode_list_request(const ClientRpcMessage &message)
 Frame ClientProtocol::encode_list_response(std::uint64_t request_id, const ListResponse &response) {
 	BinaryWriter writer;
 
-	writer.write<std::uint32_t>(response.info_vec.size());
+	writer.write<ClientStatus, std::uint32_t>(response.status, response.info_vec.size());
 
 	for (const auto &info : response.info_vec) {
 		writer.write(info.path, info.is_directory);
@@ -101,7 +101,7 @@ ListResponse ClientProtocol::decode_list_response(const ClientRpcMessage &messag
 
 	BinaryReader reader{ message.body };
 
-	auto size = reader.read<std::uint32_t>();
+	const auto [status, size] = reader.read<ClientStatus, std::uint32_t>();
 
 	std::vector<FileInfo> info_vec(size);
 
@@ -113,8 +113,62 @@ ListResponse ClientProtocol::decode_list_response(const ClientRpcMessage &messag
 		};
 	}
 
+	reader.assert_at_end();
+
 	return ListResponse{
+		.status = status,
 		.info_vec = std::move(info_vec),
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame ClientProtocol::encode_mkdir_request(std::uint64_t request_id, const MakeDirRequest &response) {
+	BinaryWriter writer;
+
+	writer.write(response.path);
+
+	return Rpc::make_frame(
+		request_id,
+		ClientJob::MKDIR,
+		RpcKind::Request,
+		writer.move_data());
+}
+
+MakeDirRequest ClientProtocol::decode_mkdir_request(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::MKDIR, RpcKind::Request>(message);
+	BinaryReader reader{ message.body };
+	auto path = reader.read_string();
+
+	reader.assert_at_end();
+
+	return MakeDirRequest{
+		.path = std::move(path),
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame ClientProtocol::encode_mdkir_response(std::uint64_t request_id, const MakeDirResponse &response) {
+	BinaryWriter writer;
+
+	writer.write(response.status);
+
+	return Rpc::make_frame(
+		request_id,
+		ClientJob::MKDIR,
+		RpcKind::Response,
+		writer.move_data());
+}
+
+MakeDirResponse ClientProtocol::decode_mkdir_response(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::MKDIR, RpcKind::Response>(message);
+	BinaryReader reader{ message.body };
+
+	auto status = reader.read<ClientStatus>();
+
+	reader.assert_at_end();
+
+	return MakeDirResponse{
+		.status = status,
 		.context = RequestContext::from(message),
 	};
 }

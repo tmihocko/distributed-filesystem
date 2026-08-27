@@ -79,7 +79,17 @@ struct ListRequest {
 
 // Rpc messages have uint32 size before
 struct ListResponse {
+	ClientStatus status;
 	std::vector<FileInfo> info_vec;
+	RequestContext context;
+};
+
+struct MakeDirRequest {
+	std::string path;
+	RequestContext context;
+};
+struct MakeDirResponse {
+	ClientStatus status;
 	RequestContext context;
 };
 
@@ -98,6 +108,16 @@ ListRequest decode_list_request(const ClientRpcMessage &message);
 
 Frame encode_list_response(std::uint64_t request_id, const ListResponse &response);
 ListResponse decode_list_response(const ClientRpcMessage &message);
+
+//
+
+Frame encode_mkdir_request(std::uint64_t request_id, const MakeDirRequest &response);
+MakeDirRequest decode_mkdir_request(const ClientRpcMessage &message);
+
+Frame encode_mdkir_response(std::uint64_t request_id, const MakeDirResponse &response);
+MakeDirResponse decode_mkdir_response(const ClientRpcMessage &message);
+
+//
 
 } // namespace ClientProtocol
 

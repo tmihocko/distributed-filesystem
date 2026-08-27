@@ -47,6 +47,18 @@ class Client {
 	std::uint64_t next_id();
 	std::uint64_t current_id_ = 0;
 
+	RequestContext request_context(std::uint64_t request_id);
+
+	template <typename T>
+	std::expected<T, ClientError> status_to_error(ClientStatus status) {
+		switch (status) {
+		case ClientStatus::AlreadyExists:
+			return std::unexpected(ClientError::AlreadyExists);
+		default:
+			return std::unexpected(ClientError::ServerError);
+		}
+	}
+
 	Endpoint self_;
 	Network<NodeRole::CLIENT> network_;
 

@@ -45,6 +45,8 @@ class MetadataStore {
 
 	std::expected<void, MetadataStoreError> remove_metadata(const std::filesystem::path &filename);
 
+	std::expected<void, MetadataStoreError> make_directory(const std::filesystem::path &path);
+
 	[[nodiscard]]
 	std::expected<std::vector<FileInfo>, MetadataStoreError> list(const std::filesystem::path &path);
 

@@ -12,10 +12,10 @@ ClientEvent RpcAdapter::decode(ClientRpcMessage message) {
 
 	case ClientJob::CREATE_FILE:
 		return ClientProtocol::decode_create_file_request(message);
-
 	case ClientJob::LIST:
 		return ClientProtocol::decode_list_request(message);
-
+	case ClientJob::MKDIR:
+		return ClientProtocol::decode_mkdir_request(message);
 	default:
 		throw std::runtime_error("Job type not handled.");
 	}

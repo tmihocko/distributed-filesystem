@@ -1,21 +1,34 @@
 #include "Client.hpp"
+#include <cstdio>
 #include <stdexcept>
+
+// enum class ClientError : std::uint8_t {
+// 	AlreadyExists, 		0
+// 	ServerError,		1
+// 	BadResponse,		2
+// 	NotImplemented,		3
+// };
 
 int main() {
 	Client client{ "cl1.yaml" };
 
-	auto res1 = client.create_file("josué.png");
+	auto res1 = client.mkdir("folder1");
+	auto res4 = client.mkdir("folder2");
 
 	if (!res1) {
-		std::println("Error code: {}", static_cast<int>(res1.error()));
-	} else {
-		std::println("Success!");
+		std::println("1 Error code: {}", static_cast<int>(res1.error()));
 	}
-	auto res2 = client.list();
-
-	if (!res2) throw std::runtime_error("failed list");
-
-	for (const auto &v : res2.value()) {
-		std::println("{}, {}", v.is_directory, v.path);
+	if (!res4) {
+		std::println("4 Error code: {}", static_cast<int>(res4.error()));
 	}
+
+	auto res3 = client.list();
+
+	if (!res3) throw std::runtime_error("failed list");
+
+	for (const auto &v : res3.value()) {
+		std::print("\t\t{}", v.path);
+	}
+	std::println();
+	std::fflush(stdout);
 }

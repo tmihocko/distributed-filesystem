@@ -6,7 +6,7 @@
 #include "network/Node.hpp"
 #include "rpc/ClientProtocol.hpp"
 
-using ClientEvent = std::variant<CreateFileRequest, ListRequest>;
+using ClientEvent = std::variant<CreateFileRequest, ListRequest, MakeDirRequest>;
 
 class ClientService {
   public:
@@ -42,16 +42,32 @@ class ClientService {
 			frame = ClientProtocol::encode_list_response(
 				req.context.request_id,
 				ListResponse{
+					.status = ClientStatus::Success,
 					.info_vec = std::move(expected.value()),
 				});
 		} else {
 			frame = ClientProtocol::encode_list_response(
 				req.context.request_id,
 				ListResponse{
-					// Unused empty vector, need this because i dont want rpc stuff to be super verbose
+					// Doesnt support optionals :(
+					.status = ClientStatus::ServerError,
 					.info_vec = std::vector<FileInfo>(0),
 				});
 		}
+
+		network_.send(req.context.sender.id, std::move(frame));
+	}
+
+	void handle(MakeDirRequest req) {
+		auto expected = store_.make_directory(req.path);
+		ClientStatus status = get_client_status(expected);
+
+		Frame frame = ClientProtocol::encode_mdkir_response(
+			req.context.request_id,
+			MakeDirResponse{
+				.status = status,
+				.context = req.context,
+			});
 
 		network_.send(req.context.sender.id, std::move(frame));
 	}
