@@ -4,7 +4,7 @@
 
 Client.hpp exposes internal types:
 
-```cpp
+```c
 #include "network/Network.hpp"
 #include "network/Node.hpp"
 
@@ -17,7 +17,8 @@ Therefore, anyone including Client.hpp must also parse and have access to your c
 Use the PImpl pattern to hide that.
 Public header:
 
-```cpp
+```c
+// not c++ because i keep thinking this isnt .md in refactors
 // src/client/include/dfs/Client.hpp
 #pragma once
 
@@ -40,6 +41,8 @@ enum class ClientError : std::uint8_t {
 	ServerError,
 	BadResponse,
 	NotImplemented,
+	BadInput,
+	Timeout,
 };
 
 template <typename T>

@@ -19,14 +19,19 @@ enum class ClientJob : std::uint8_t {
 	RENAME,
 	STAT,
 
+	// Internal usage
+	WRITE_CHUNK,
 };
 
 enum class ClientError : std::uint8_t {
 	AlreadyExists,
 	ServerError,
 	BadResponse,
+	BadInput,
 	NotImplemented,
 	Timeout,
+	StorageFull,
+	ReadError,
 };
 
 struct FileInfo {
@@ -64,11 +69,38 @@ struct RequestContext {
 	}
 };
 
+// Size of chunk for data sent on big requests like write and read
+constexpr std::uint32_t CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB
+
 struct CreateFileRequest {
 	std::string path;
 	RequestContext context;
 };
 struct CreateFileResponse {
+	ClientStatus status;
+	RequestContext context;
+};
+
+struct WriteFileRequest {
+	std::uint64_t file_size;
+	std::uint32_t chunk_count; // 18 petabyte max
+	std::string path;
+	RequestContext context;
+};
+
+struct WriteFileResponse {
+	bool storage_available;
+	RequestContext context;
+};
+
+struct WriteChunkRequest {
+	std::uint32_t chunk_index;
+	std::vector<std::byte> data;
+	RequestContext context;
+};
+
+struct WriteChunkResponse {
+	std::uint32_t chunk_index;
 	ClientStatus status;
 	RequestContext context;
 };
@@ -101,6 +133,20 @@ CreateFileRequest decode_create_file_request(const ClientRpcMessage &message);
 
 Frame encode_create_file_response(std::uint64_t request_id, const CreateFileResponse &response);
 CreateFileResponse decode_create_file_response(const ClientRpcMessage &message);
+
+//
+
+Frame encode_write_file_request(std::uint64_t request_id, const WriteFileRequest &request);
+WriteFileRequest decode_write_file_request(const ClientRpcMessage &message);
+
+Frame encode_write_chunk_request(std::uint64_t request_id, const WriteChunkRequest &request);
+WriteChunkRequest decode_write_chunk_request(const ClientRpcMessage &message);
+
+Frame encode_write_chunk_response(std::uint64_t request_id, const WriteChunkResponse &response);
+WriteChunkResponse decode_write_chunk_response(const ClientRpcMessage &message);
+
+Frame encode_write_file_response(std::uint64_t request_id, const WriteFileResponse &response);
+WriteFileResponse decode_write_file_response(const ClientRpcMessage &message);
 
 //
 

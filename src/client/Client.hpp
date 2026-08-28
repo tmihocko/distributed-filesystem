@@ -11,6 +11,7 @@ TODO: leader_ is still here after removing raft, store metadata address/id and u
 #include <string>
 #include <vector>
 #include "rpc/ClientProtocol.hpp"
+#include "rpc/Rpc.hpp"
 
 template <typename T>
 using ClientOperation = std::expected<T, ClientError>;
@@ -24,9 +25,10 @@ class Client {
 
 	ClientOperation<void> create_file(std::string path);
 
+	[[nodiscard]]
 	ClientOperation<std::vector<std::byte>> read_file(std::string path, std::size_t byte_count);
 
-	ClientOperation<void> write_file(std::string path, std::span<const std::byte> contents);
+	ClientOperation<void> write_file(std::string local_path, std::string path);
 
 	ClientOperation<void> remove(std::string path);
 
@@ -36,6 +38,7 @@ class Client {
 
 	ClientOperation<void> rename(std::string old_path, std::string new_path);
 
+	[[nodiscard]]
 	ClientOperation<FileStats> stat(std::string path);
 
 	Client(const Client &) = delete;
@@ -44,8 +47,12 @@ class Client {
 	auto operator=(Client &&) = delete;
 
   private:
-	std::uint64_t next_id();
-	std::uint64_t current_id_ = 0;
+	template <ClientJob Job, RpcKind Kind = RpcKind::Response>
+	bool validate_rpc_header(RpcHeader<ClientJob> header, std::uint64_t request_id) {
+		return header.request_id == request_id &&
+			   header.kind == Kind &&
+			   header.job == Job;
+	}
 
 	RequestContext request_context(std::uint64_t request_id);
 
@@ -58,6 +65,9 @@ class Client {
 			return std::unexpected(ClientError::ServerError);
 		}
 	}
+
+	std::uint64_t next_id();
+	std::uint64_t current_id_ = 0;
 
 	Endpoint self_;
 	Network<NodeRole::CLIENT> network_;
