@@ -93,6 +93,24 @@ RpcMessage<Job> read_message(Message message) {
 	return rpc_message;
 }
 
+template <RpcJob Job, RpcKind Kind>
+bool message_is(const Message &message) {
+	if (message.header.magic != HEADER_MAGIC) return false;
+	if (message.header.type != RpcTraits<Job>::message_type) return false;
+	if (message.header.length != message.buffer.size()) return false;
+
+	try {
+		BinaryReader reader{ message.buffer };
+
+		reader.read<std::uint64_t>(); // request_id
+		reader.read<Job>();			  // job
+
+		return reader.read<RpcKind>() == Kind;
+	} catch (const std::exception &) {
+		return false;
+	}
+}
+
 } // namespace Rpc
 
 #endif // RPC_HPP

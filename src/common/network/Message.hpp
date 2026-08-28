@@ -14,10 +14,11 @@ enum class MessageType : std::uint8_t {
 
 	// Client-Metadata
 	CLIENT_RPC,
+
 	// Metadata-Storage
 	STORAGE_RPC,
-	// Metadata-Metadata
-	CONSENSUS,
+
+	STORAGE_HEARTBEAT, // Here so network.receive_if's predicate can filter without transforming into RpcMessage
 };
 
 struct __attribute__((packed)) MessageHeader {

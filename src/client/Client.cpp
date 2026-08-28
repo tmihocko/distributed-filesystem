@@ -3,8 +3,11 @@
 #include "rpc/ClientProtocol.hpp"
 #include "rpc/Rpc.hpp"
 #include "Yaml.hpp"
+#include <chrono>
 #include <cstdint>
 #include <expected>
+
+std::chrono::seconds TIMEOUT(3);
 
 Client::Client(Endpoint self, std::span<const Endpoint> seed_nodes) : self_(self), network_(self) {
 	network_.start(seed_nodes);
@@ -30,8 +33,11 @@ ClientOperation<void> Client::create_file(std::string path) {
 
 	network_.send(metadata_node_id_, std::move(frame));
 
-	auto message = network_.receive();
-	auto rpc_message = Rpc::read_message<ClientJob>(message);
+	auto message = network_.receive_if(TIMEOUT, &Rpc::message_is<ClientJob, RpcKind::Response>);
+
+	if (!message) return std::unexpected(ClientError::Timeout);
+
+	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
 
 	if (rpc_message.rpc_header.request_id != request_id) return std::unexpected(ClientError::BadResponse);
 	if (rpc_message.rpc_header.kind != RpcKind::Response) return std::unexpected(ClientError::BadResponse);
@@ -70,8 +76,11 @@ ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
 
 	network_.send(metadata_node_id_, std::move(frame));
 
-	auto message = network_.receive();
-	auto rpc_message = Rpc::read_message<ClientJob>(message);
+	auto message = network_.receive_if(TIMEOUT, &Rpc::message_is<ClientJob, RpcKind::Response>);
+
+	if (!message) return std::unexpected(ClientError::Timeout);
+
+	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
 
 	if (rpc_message.rpc_header.request_id != request_id) return std::unexpected(ClientError::BadResponse);
 	if (rpc_message.rpc_header.kind != RpcKind::Response) return std::unexpected(ClientError::BadResponse);
@@ -98,8 +107,11 @@ ClientOperation<void> Client::mkdir(std::string path) {
 
 	network_.send(metadata_node_id_, std::move(frame));
 
-	auto message = network_.receive();
-	auto rpc_message = Rpc::read_message<ClientJob>(message);
+	auto message = network_.receive_if(TIMEOUT, &Rpc::message_is<ClientJob, RpcKind::Response>);
+
+	if (!message) return std::unexpected(ClientError::Timeout);
+
+	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
 
 	if (rpc_message.rpc_header.request_id != request_id) return std::unexpected(ClientError::BadResponse);
 	if (rpc_message.rpc_header.kind != RpcKind::Response) return std::unexpected(ClientError::BadResponse);

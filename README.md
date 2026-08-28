@@ -4,4 +4,4 @@
 
 Uses C++23, CMake, Boost Asio, yaml-cpp
 
-Runs on unix systems
+Runs on unix/posix systems

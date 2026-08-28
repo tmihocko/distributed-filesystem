@@ -9,11 +9,19 @@ Basically the leader object of everything in this process
 #define METADATA_NODE_HPP
 #include "network/Network.hpp"
 #include "network/Node.hpp"
-#include "workers/ClientService.hpp"
-#include "workers/StorageService.hpp"
+#include "rpc/StorageProtocol.hpp"
+#include "MetadataWorker.hpp"
 #include "util/BlockingQueue.hpp"
+#include <chrono>
+#include <unordered_map>
 
-using Event = std::variant<ClientEvent, StorageEvent>;
+struct StorageNodeInfo {
+	std::chrono::steady_clock::time_point last_seen;
+	std::uint64_t bytes_left;
+	bool available = true;
+};
+
+using Event = std::variant<ClientEvent, StorageHeartbeat>;
 
 class MetadataNode {
   public:
@@ -24,6 +32,9 @@ class MetadataNode {
 	void stop();
 
   private:
+	void handle_heartbeat(StorageHeartbeat heartbeat);
+	void check_heartbeat_timeouts();
+
 	void push_worker_job(Message message);
 
 	void setup();
@@ -32,16 +43,19 @@ class MetadataNode {
 	Network<NodeRole::METADATA> network_;
 
 	MetadataStore store_;
-	StorageService storage_;
-	ClientService client_;
+	MetadataWorker client_;
 
-	std::chrono::duration<int, std::milli> timeout_; // = something
+	std::chrono::seconds network_receive_timeout_{ 1 };
+	std::chrono::seconds heartbeat_check_interval_{ 1 };
+	std::chrono::seconds heartbeat_timeout_{ 10 };
 
-	BlockingQueue<Event> worker_queue_;
+	BlockingQueue<Event> job_queue_;
 	// BlockingQueue<int> heartbeat_queue_; ??? maybe this is a vector, one heartbeat thread for each storage node
 
 	std::jthread network_producer_;
 	std::jthread worker_thread_; // consumer
+
+	std::unordered_map<NodeId, StorageNodeInfo> storage_nodes;
 
 	bool has_setup_ = false;
 };

@@ -1,2 +1,33 @@
-int main() {
+#include "network/Node.hpp"
+#include "Yaml.hpp"
+#include <iostream>
+#include <latch>
+#include "StorageNode.hpp"
+
+int main(int argc, const char *argv[]) {
+	if (int num_args = 2; argc != num_args) {
+		std::println("Invalid number of arguments, {} required, got {}.", num_args - 1, argc - 1);
+		return EXIT_FAILURE;
+	}
+
+	std::cout << "Starting storage node: " << argv[1] << std::endl;
+
+	std::string config_file = argv[1];
+
+	NodeConfig self = Yaml::get_node_config(config_file);
+	std::vector<Endpoint> seed_nodes = Yaml::get_seed_nodes(config_file);
+
+	StorageNode storage{ self, seed_nodes };
+
+	storage.start();
+
+	std::latch forever{ 1 };
+	forever.wait();
 }
+
+/**
+
+TODO:
+
+
+*/

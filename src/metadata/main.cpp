@@ -2,6 +2,7 @@
 #include "network/Node.hpp"
 #include "Yaml.hpp"
 #include <iostream>
+#include <latch>
 
 int main(int argc, const char *argv[]) {
 	if (int num_args = 2; argc != num_args) {
@@ -9,7 +10,7 @@ int main(int argc, const char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	std::cout << "Starting: " << argv[1] << std::endl;
+	std::cout << "Starting metadata node: " << argv[1] << std::endl;
 
 	std::string config_file = argv[1];
 
@@ -20,8 +21,8 @@ int main(int argc, const char *argv[]) {
 
 	metadata.start();
 
-	while (true) {
-	}
+	std::latch forever{ 1 };
+	forever.wait();
 }
 
 /**

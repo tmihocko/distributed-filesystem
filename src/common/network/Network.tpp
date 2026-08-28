@@ -75,6 +75,12 @@ std::optional<Message> Network<SelfRole>::receive(std::chrono::duration<Rep, Per
 }
 
 template <NodeRole SelfRole>
+template <typename Rep, typename Period>
+std::optional<Message> Network<SelfRole>::receive_if(std::chrono::duration<Rep, Period> timeout, std::function<bool(const Message &)> predicate) {
+	return message_queue_.pop_if(timeout, std::move(predicate));
+}
+
+template <NodeRole SelfRole>
 auto Network<SelfRole>::nodes_of_role(NodeRole role) {
 	return connections_ |
 		   std::views::values |

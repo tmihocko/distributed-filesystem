@@ -26,6 +26,7 @@ enum class ClientError : std::uint8_t {
 	ServerError,
 	BadResponse,
 	NotImplemented,
+	Timeout,
 };
 
 struct FileInfo {

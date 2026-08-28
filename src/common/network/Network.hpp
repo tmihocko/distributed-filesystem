@@ -43,6 +43,9 @@ class Network {
 	template <typename Rep, typename Period>
 	std::optional<Message> receive(std::chrono::duration<Rep, Period> timeout);
 
+	template <typename Rep, typename Period>
+	std::optional<Message> receive_if(std::chrono::duration<Rep, Period> timeout, std::function<bool(const Message &)> predicate);
+
 	auto nodes_of_role(NodeRole role);
 
 	static constexpr NodeRole self_role = SelfRole;
