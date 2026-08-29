@@ -17,7 +17,7 @@ MetadataNode::MetadataNode(
 	: config_(std::move(config)),
 	  network_(config_),
 	  store_(config_.data_directory),
-	  client_(config_, network_, store_) {
+	  worker_(config_, network_, store_, storage_nodes_) {
 	const auto expected = store_.load_from_storage();
 	if (!expected) {
 		std::println("MetadataStoreError: {}", static_cast<int>(expected.error()));
@@ -58,7 +58,7 @@ void MetadataNode::start() {
 						if constexpr (std::same_as<T, ClientEvent>) {
 							std::visit(
 								[this](auto &&request) {
-									client_.handle(std::move(request));
+									worker_.handle(std::move(request));
 								},
 								std::move(event));
 						} else { // StorageHeartbeat
@@ -75,7 +75,7 @@ void MetadataNode::start() {
 void MetadataNode::check_heartbeat_timeouts() {
 	const auto now = std::chrono::steady_clock::now();
 
-	for (auto &[node_id, info] : storage_nodes) {
+	for (auto &[node_id, info] : storage_nodes_) {
 		if (!info.available) continue;
 
 		const auto elapsed = now - info.last_seen;
@@ -95,7 +95,7 @@ void MetadataNode::handle_heartbeat(StorageHeartbeat heartbeat) {
 	const auto now = std::chrono::steady_clock::now();
 	const auto &node_id = heartbeat.sender.id;
 
-	auto [it, inserted] = storage_nodes.try_emplace(
+	auto [it, inserted] = storage_nodes_.try_emplace(
 		node_id,
 		StorageNodeInfo{
 			.last_seen = now,
@@ -130,6 +130,12 @@ void MetadataNode::push_worker_job(Message message) {
 			break;
 		case ClientJob::MKDIR:
 			job_queue_.push(ClientProtocol::decode_mkdir_request(rpc_message));
+			break;
+		case ClientJob::WRITE_FILE:
+			job_queue_.push(ClientProtocol::decode_write_file_request(rpc_message));
+			break;
+		case ClientJob::WRITE_CHUNK:
+			job_queue_.push(ClientProtocol::decode_write_chunk_request(rpc_message));
 			break;
 		default:
 			throw std::runtime_error("Job type not handled.");

@@ -15,12 +15,6 @@ Basically the leader object of everything in this process
 #include <chrono>
 #include <unordered_map>
 
-struct StorageNodeInfo {
-	std::chrono::steady_clock::time_point last_seen;
-	std::uint64_t bytes_left;
-	bool available = true;
-};
-
 using Event = std::variant<ClientEvent, StorageHeartbeat>;
 
 class MetadataNode {
@@ -43,7 +37,7 @@ class MetadataNode {
 	Network<NodeRole::METADATA> network_;
 
 	MetadataStore store_;
-	MetadataWorker client_;
+	MetadataWorker worker_;
 
 	std::chrono::seconds network_receive_timeout_{ 1 };
 	std::chrono::seconds heartbeat_check_interval_{ 1 };
@@ -55,7 +49,7 @@ class MetadataNode {
 	std::jthread network_producer_;
 	std::jthread worker_thread_; // consumer
 
-	std::unordered_map<NodeId, StorageNodeInfo> storage_nodes;
+	std::unordered_map<NodeId, StorageNodeInfo> storage_nodes_;
 
 	bool has_setup_ = false;
 };

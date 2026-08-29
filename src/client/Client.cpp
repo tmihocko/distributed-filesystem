@@ -24,11 +24,15 @@ Client::Client(Endpoint self, std::span<const Endpoint> seed_nodes) : self_(self
 Client::Client(const std::string &config_file) : Client(Yaml::get_node_info(config_file), Yaml::get_seed_nodes(config_file)) {}
 
 ClientOperation<void> Client::create_file(std::string path) {
+
+	std::filesystem::path temp{ path };
+	auto clean_path = temp.lexically_normal().string(); // Remove trailing slashes and other bs
+
 	auto request_id = next_id();
 
 	CreateFileRequest request{
-		.path = std::move(path),
-		.context = request_context(request_id),
+		.path = std::move(clean_path),
+		.context = {}
 	};
 
 	auto frame = ClientProtocol::encode_create_file_request(request_id, request);
@@ -60,7 +64,6 @@ ClientOperation<std::vector<std::byte>> Client::read_file(std::string path, std:
 
 ClientOperation<void> Client::write_file(std::string local_path, std::string path) {
 	auto request_id = next_id();
-	const auto context = request_context(request_id);
 
 	std::ifstream file(local_path, std::ios::binary);
 
@@ -78,7 +81,7 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 		.file_size = file_size,
 		.chunk_count = chunk_count,
 		.path = path,
-		.context = context,
+		.context = {}
 	};
 
 	const auto write_req_frame = ClientProtocol::encode_write_file_request(request_id, write_req);
@@ -95,7 +98,9 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 
 	const auto write_response = ClientProtocol::decode_write_file_response(rpc_write_response);
 
-	if (!write_response.storage_available) return std::unexpected(ClientError::StorageFull);
+	if (write_response.status != ClientStatus::Success) {
+		return status_to_error<void>(write_response.status);
+	}
 
 	for (std::uint32_t chunk_index = 0; chunk_index < chunk_count; chunk_index++) {
 		std::vector<std::byte> data(CHUNK_SIZE);
@@ -110,7 +115,7 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 		WriteChunkRequest write_chunk{
 			.chunk_index = chunk_index,
 			.data = std::move(data),
-			.context = context,
+			.context = {}
 		};
 
 		auto frame = ClientProtocol::encode_write_chunk_request(request_id, write_chunk);
@@ -121,14 +126,14 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 		if (!chunk_frame) return std::unexpected(ClientError::Timeout);
 		auto rpc_chunk_response = Rpc::read_message<ClientJob>(chunk_frame.value());
 
-		if (!validate_rpc_header<ClientJob::WRITE_CHUNK, RpcKind::Response>(rpc_write_response.rpc_header, request_id)) {
+		if (!validate_rpc_header<ClientJob::WRITE_CHUNK, RpcKind::Response>(rpc_chunk_response.rpc_header, request_id)) {
 			return std::unexpected(ClientError::BadResponse);
 		}
 
 		const auto chunk_response = ClientProtocol::decode_write_chunk_response(rpc_chunk_response);
 		if (chunk_response.chunk_index != chunk_index) return std::unexpected(ClientError::BadResponse);
 
-		// handle unexpecteds, this function will end with a WriteChunkResponse
+		// this might need more stuff to check responses i didnt think it thourgh much
 		if (chunk_response.status != ClientStatus::Success) {
 			return status_to_error<void>(chunk_response.status);
 		}
@@ -146,7 +151,7 @@ ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
 
 	ListRequest request{
 		.path = directory,
-		.context = request_context(request_id),
+		.context = {}
 	};
 
 	auto frame = ClientProtocol::encode_list_request(request_id, request);
@@ -177,7 +182,7 @@ ClientOperation<void> Client::mkdir(std::string path) {
 
 	MakeDirRequest request{
 		.path = path,
-		.context = request_context(request_id),
+		.context = {}
 	};
 
 	Frame frame = ClientProtocol::encode_mkdir_request(request_id, request);
@@ -213,11 +218,4 @@ ClientOperation<FileStats> Client::stat(std::string path) {
 
 std::uint64_t Client::next_id() {
 	return ++current_id_;
-}
-
-RequestContext Client::request_context(std::uint64_t request_id) {
-	return RequestContext{
-		.request_id = request_id,
-		.sender = NodeIdentity{ self_.node_id, self_.role }
-	};
 }

@@ -10,6 +10,12 @@
 static constexpr std::uint8_t METADATA_MAGIC = 0x69;
 static constexpr std::uint8_t METADATA_VERSION = 0x01;
 
+struct StorageNodeInfo {
+	std::chrono::steady_clock::time_point last_seen;
+	std::uint64_t bytes_left;
+	bool available = true;
+}; // Not actually for the store, just here to solve cyclic dependency
+
 struct FileMetadata {
 	std::filesystem::path path;
 
@@ -42,6 +48,8 @@ class MetadataStore {
 
 	// Update RAM + persist this entry
 	std::expected<void, MetadataStoreError> add_metadata(const std::filesystem::path &filename, FileMetadata metadata);
+
+	std::expected<void, MetadataStoreError> update_metadata(const std::filesystem::path &filename, FileMetadata metadata);
 
 	std::expected<void, MetadataStoreError> remove_metadata(const std::filesystem::path &filename);
 

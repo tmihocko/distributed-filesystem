@@ -54,8 +54,6 @@ class Client {
 			   header.job == Job;
 	}
 
-	RequestContext request_context(std::uint64_t request_id);
-
 	template <typename T>
 	std::expected<T, ClientError> status_to_error(ClientStatus status) {
 		switch (status) {

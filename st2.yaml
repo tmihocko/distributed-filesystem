@@ -1,0 +1,13 @@
+node:
+  node_id: "st2"
+  role: "Storage"
+  host: "127.0.0.1"
+  port: 8005
+  data_dir: "tmp/st2"
+
+seed_nodes:
+  - node_id: "md1"
+    role: "Metadata"
+    host: "127.0.0.1"
+    port: 8000
+    

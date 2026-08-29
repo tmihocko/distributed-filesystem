@@ -10,12 +10,12 @@
 #include <stop_token>
 #include <thread>
 
-using StorageEvent = std::variant<StorageRpcMessage>;
+using StorageEvent = std::variant<PutRequest>;
 
 class StorageNode {
   public:
 	StorageNode(NodeConfig config, std::span<const Endpoint> seed_nodes)
-		: config_(config), network_(config), heart_(network_, metadata_node_id(seed_nodes)) {
+		: config_(config), network_(config), worker_(config, network_), heart_(network_, metadata_node_id(seed_nodes)) {
 		network_.start(seed_nodes);
 	}
 
@@ -23,6 +23,8 @@ class StorageNode {
 		network_producer_ = std::jthread([this](std::stop_token stop) {
 			while (!stop.stop_requested()) {
 				auto message = network_.receive();
+
+				push_worker_job(std::move(message));
 			}
 		});
 
@@ -49,6 +51,19 @@ class StorageNode {
 	}
 
   private:
+	void push_worker_job(Message message) {
+		auto rpc_message = Rpc::read_message<StorageJob>(std::move(message));
+
+		switch (rpc_message.rpc_header.job) {
+
+		case StorageJob::PUT:
+			job_queue_.push(StorageProtocol::decode_put_request(rpc_message));
+			break;
+		default:
+			throw std::runtime_error("Job type not handled.");
+		}
+	}
+
 	NodeConfig config_;
 	Network<NodeRole::STORAGE> network_;
 

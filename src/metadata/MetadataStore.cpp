@@ -174,6 +174,24 @@ std::expected<void, MetadataStoreError> MetadataStore::add_metadata(
 	return {};
 }
 
+std::expected<void, MetadataStoreError> MetadataStore::update_metadata(const fs::path &filename, FileMetadata metadata) {
+	if (!valid_filename(filename)) return std::unexpected(MetadataStoreError::INVALID_PATH);
+
+	if (!data_.contains(filename)) {
+		return add_metadata(filename, std::move(metadata));
+	}
+
+	metadata.path = filename;
+
+	auto result = write_metadata_file(filename, metadata);
+
+	if (!result) return result;
+
+	data_.insert_or_assign(filename, std::move(metadata));
+
+	return {};
+}
+
 std::expected<void, MetadataStoreError> MetadataStore::remove_metadata(const fs::path &filename) {
 	if (!valid_filename(filename)) return std::unexpected(MetadataStoreError::INVALID_PATH);
 

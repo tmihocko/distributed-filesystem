@@ -70,7 +70,7 @@ struct RequestContext {
 };
 
 // Size of chunk for data sent on big requests like write and read
-constexpr std::uint32_t CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB
+constexpr std::uint32_t CHUNK_SIZE = 512 * 1024;
 
 struct CreateFileRequest {
 	std::string path;
@@ -89,7 +89,7 @@ struct WriteFileRequest {
 };
 
 struct WriteFileResponse {
-	bool storage_available;
+	ClientStatus status;
 	RequestContext context;
 };
 

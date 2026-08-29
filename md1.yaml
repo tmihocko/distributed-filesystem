@@ -14,4 +14,8 @@ seed_nodes:
     role: "Storage"
     host: "127.0.0.1"
     port: 8001
+  - node_id: "st2"
+    role: "Storage"
+    host: "127.0.0.1"
+    port: 8005
     

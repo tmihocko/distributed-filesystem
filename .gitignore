@@ -3,8 +3,10 @@ build/
 .ccls-cache/
 .vscode/
 bin/
-metadata/
 tmp/
+
+# random filename im using to test write_file
+ex.txt 
 
 .DS_STORE
 
