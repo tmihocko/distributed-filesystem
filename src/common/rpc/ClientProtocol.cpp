@@ -1,6 +1,8 @@
 #include "ClientProtocol.hpp"
 #include "Serializer.hpp"
+#include "network/Node.hpp"
 #include "rpc/Rpc.hpp"
+#include <print>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -9,6 +11,20 @@ template <ClientJob job, RpcKind kind>
 static void validate_rpc_message(const ClientRpcMessage &message) {
 	if (message.rpc_header.kind != kind) throw std::runtime_error("Expected other RpcKind");
 	if (message.rpc_header.job != job) throw std::runtime_error("Expected other job type");
+}
+
+void FileStat::print() {
+	std::println("\tType: {}", is_directory ? "directory" : "file");
+	std::println("\tSize: {} bytes", size);
+
+	if (!is_directory) {
+		std::println("\tObject ID: {}", object_id);
+		std::println("\tStorage node 1: {}", storage_nodes[0]);
+		std::println("\tStorage node 2: {}", storage_nodes[1]);
+	}
+
+	std::println("\tCreated: {:%F %T}", std::chrono::floor<std::chrono::seconds>(created_at));
+	std::println("\tModified: {:%F %T}", std::chrono::floor<std::chrono::seconds>(modified_at));
 }
 
 Frame ClientProtocol::encode_create_file_request(std::uint64_t request_id, const CreateFileRequest &request) {
@@ -343,6 +359,71 @@ RenameResponse ClientProtocol::decode_rename_response(const ClientRpcMessage &me
 
 	return RenameResponse{
 		.status = status,
+		.context = RequestContext::from(message),
+	};
+}
+
+//
+
+Frame ClientProtocol::encode_stat_request(std::uint64_t request_id, const StatRequest &request) {
+	BinaryWriter writer;
+	writer.write(request.path);
+
+	return Rpc::make_frame(request_id, ClientJob::STAT, RpcKind::Request, writer.move_data());
+}
+
+StatRequest ClientProtocol::decode_stat_request(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::STAT, RpcKind::Request>(message);
+
+	BinaryReader reader{ message.body };
+	const auto path = reader.read<std::string>();
+
+	reader.assert_at_end();
+
+	return StatRequest{
+		.path = path,
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame ClientProtocol::encode_stat_response(std::uint64_t request_id, const StatResponse &response) {
+	BinaryWriter writer;
+
+	const auto stat = response.stat;
+
+	writer.write(
+		response.status,
+		stat.is_directory,
+		stat.storage_nodes[0],
+		stat.storage_nodes[1],
+		stat.object_id,
+		stat.size,
+		stat.created_at,
+		stat.modified_at);
+
+	return Rpc::make_frame(request_id, ClientJob::STAT, RpcKind::Response, writer.move_data());
+}
+StatResponse ClientProtocol::decode_stat_response(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::STAT, RpcKind::Response>(message);
+
+	BinaryReader reader{ message.body };
+	const auto [status, is_dir, node_0, node_1, obj_id, size, created, modified] =
+		reader.read<
+			ClientStatus, bool, NodeId, NodeId, std::string, std::uint64_t,
+			std::chrono::system_clock::time_point, std::chrono::system_clock::time_point>();
+
+	reader.assert_at_end();
+
+	return StatResponse{
+		.status = status,
+		.stat = FileStat{
+			.is_directory = is_dir,
+			.storage_nodes = { node_0, node_1 },
+			.object_id = obj_id,
+			.size = size,
+			.created_at = created,
+			.modified_at = modified,
+		},
 		.context = RequestContext::from(message),
 	};
 }

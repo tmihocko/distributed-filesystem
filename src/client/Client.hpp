@@ -10,7 +10,7 @@
 #include "rpc/Rpc.hpp"
 
 // todo:
-// rename, stat, read_file
+// stat, read_file
 
 template <typename T>
 using ClientOperation = std::expected<T, ClientError>;
@@ -40,7 +40,7 @@ class Client {
 	ClientOperation<void> rename(std::string old_path, std::string new_path);
 
 	[[nodiscard]]
-	ClientOperation<FileStats> stat(std::string path);
+	ClientOperation<FileStat> stat(std::string path);
 
 	Client(const Client &) = delete;
 	auto operator=(const Client &) = delete;

@@ -5,6 +5,7 @@ Client--Metadata RPC
 */
 #ifndef CLIENTPROTOCOL_HPP
 #define CLIENTPROTOCOL_HPP
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include "Rpc.hpp"
@@ -40,7 +41,19 @@ struct FileInfo {
 	bool is_directory;
 };
 
-struct FileStats {};
+struct FileStat {
+	bool is_directory; // false = file, true = directory
+
+	std::array<NodeId, 2> storage_nodes; // machine storing the object
+	std::string object_id;				 // stable identity in your DFS
+
+	std::uint64_t size; // logical size in bytes
+
+	std::chrono::system_clock::time_point created_at;
+	std::chrono::system_clock::time_point modified_at;
+
+	void print();
+};
 
 using ClientRpcMessage = RpcMessage<ClientJob>;
 using ClientRpcHeader = RpcHeader<ClientJob>;
@@ -82,6 +95,8 @@ struct CreateFileResponse {
 	RequestContext context;
 };
 
+//
+
 struct WriteFileRequest {
 	std::uint64_t file_size;
 	std::uint32_t chunk_count; // 18 petabyte max
@@ -106,6 +121,8 @@ struct WriteChunkResponse {
 	RequestContext context;
 };
 
+//
+
 struct RemoveRequest {
 	std::string path;
 	RequestContext context;
@@ -114,6 +131,8 @@ struct RemoveRequest {
 struct RemoveResponse {
 	ClientStatus status;
 };
+
+//
 
 struct ListRequest {
 	std::string path;
@@ -126,6 +145,8 @@ struct ListResponse {
 	std::vector<FileInfo> info_vec;
 	RequestContext context;
 };
+
+//
 
 struct MakeDirRequest {
 	std::string path;
@@ -148,6 +169,19 @@ struct RenameResponse {
 	RequestContext context;
 };
 
+//
+
+struct StatRequest {
+	std::string path;
+	RequestContext context;
+};
+
+struct StatResponse {
+	ClientStatus status;
+	FileStat stat;
+	RequestContext context;
+};
+
 namespace ClientProtocol {
 
 Frame encode_create_file_request(std::uint64_t request_id, const CreateFileRequest &request);
@@ -164,7 +198,7 @@ WriteFileRequest decode_write_file_request(const ClientRpcMessage &message);
 Frame encode_write_chunk_request(std::uint64_t request_id, const WriteChunkRequest &request);
 WriteChunkRequest decode_write_chunk_request(const ClientRpcMessage &message);
 
-Frame encode_write_chunk_response(std::uint64_t request_id, const WriteChunkResponse &response);
+Frame encode_write_chunk_response(std::uint64_t request_id, const WriteChunkResponse &request);
 WriteChunkResponse decode_write_chunk_response(const ClientRpcMessage &message);
 
 Frame encode_write_file_response(std::uint64_t request_id, const WriteFileResponse &response);
@@ -172,7 +206,7 @@ WriteFileResponse decode_write_file_response(const ClientRpcMessage &message);
 
 //
 
-Frame encode_remove_request(std::uint64_t request_id, const RemoveRequest &response);
+Frame encode_remove_request(std::uint64_t request_id, const RemoveRequest &request);
 RemoveRequest decode_remove_request(const ClientRpcMessage &message);
 
 Frame encode_remove_response(std::uint64_t request_id, const RemoveResponse &response);
@@ -180,7 +214,7 @@ RemoveResponse decode_remove_response(const ClientRpcMessage &message);
 
 //
 
-Frame encode_list_request(std::uint64_t request_id, const ListRequest &response);
+Frame encode_list_request(std::uint64_t request_id, const ListRequest &request);
 ListRequest decode_list_request(const ClientRpcMessage &message);
 
 Frame encode_list_response(std::uint64_t request_id, const ListResponse &response);
@@ -188,7 +222,7 @@ ListResponse decode_list_response(const ClientRpcMessage &message);
 
 //
 
-Frame encode_mkdir_request(std::uint64_t request_id, const MakeDirRequest &response);
+Frame encode_mkdir_request(std::uint64_t request_id, const MakeDirRequest &request);
 MakeDirRequest decode_mkdir_request(const ClientRpcMessage &message);
 
 Frame encode_mdkir_response(std::uint64_t request_id, const MakeDirResponse &response);
@@ -196,11 +230,19 @@ MakeDirResponse decode_mkdir_response(const ClientRpcMessage &message);
 
 //
 
-Frame encode_rename_request(std::uint64_t request_id, const RenameRequest &response);
+Frame encode_rename_request(std::uint64_t request_id, const RenameRequest &request);
 RenameRequest decode_rename_request(const ClientRpcMessage &message);
 
 Frame encode_rename_response(std::uint64_t request_id, const RenameResponse &response);
 RenameResponse decode_rename_response(const ClientRpcMessage &message);
+
+//
+
+Frame encode_stat_request(std::uint64_t request_id, const StatRequest &request);
+StatRequest decode_stat_request(const ClientRpcMessage &message);
+
+Frame encode_stat_response(std::uint64_t request_id, const StatResponse &response);
+StatResponse decode_stat_response(const ClientRpcMessage &message);
 
 } // namespace ClientProtocol
 

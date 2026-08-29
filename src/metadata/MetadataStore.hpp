@@ -3,6 +3,7 @@
 #include "network/Node.hpp"
 #include "rpc/ClientProtocol.hpp"
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <unordered_map>
 #include <expected>
@@ -22,6 +23,9 @@ struct FileMetadata {
 	std::uint64_t size;
 	std::string obj_id; // Filename in storage node
 	std::array<NodeId, 2> replica_locations;
+
+	std::chrono::system_clock::time_point created_at{};
+	std::chrono::system_clock::time_point modified_at{};
 };
 
 enum class MetadataStoreError {

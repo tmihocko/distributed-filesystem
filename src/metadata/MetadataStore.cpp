@@ -23,7 +23,14 @@ MetadataStore::MetadataStore(const fs::path &directory) : directory_(directory) 
 std::expected<void, MetadataStoreError> MetadataStore::write_metadata_file(const fs::path &filename, const FileMetadata &metadata) {
 	BinaryWriter writer;
 
-	writer.write(METADATA_MAGIC, METADATA_VERSION, metadata.size, metadata.obj_id, metadata.replica_locations[0], metadata.replica_locations[1]);
+	writer.write(
+		METADATA_MAGIC, METADATA_VERSION,
+		metadata.size,
+		metadata.obj_id,
+		metadata.replica_locations[0],
+		metadata.replica_locations[1],
+		metadata.created_at,
+		metadata.modified_at);
 
 	const std::streamsize length = writer.length();
 	auto data = writer.move_data();
@@ -88,8 +95,9 @@ std::expected<FileMetadata, MetadataStoreError> MetadataStore::read_metadata_fil
 	try {
 		BinaryReader reader{ bytes };
 
-		const auto &[magic, version, file_size, obj_id, rep1, rep2] =
-			reader.read<std::uint8_t, std::uint8_t, std::uint64_t, std::string, NodeId, NodeId>();
+		const auto &[magic, version, file_size, obj_id, rep1, rep2, created_at, modified_at] =
+			reader.read<std::uint8_t, std::uint8_t, std::uint64_t, std::string, NodeId, NodeId,
+						std::chrono::system_clock::time_point, std::chrono::system_clock::time_point>();
 
 		if (magic != METADATA_MAGIC) return std::unexpected(MetadataStoreError::MALFORMED_FILE);
 		if (version != METADATA_VERSION) return std::unexpected(MetadataStoreError::WRONG_VERSION);
@@ -100,6 +108,8 @@ std::expected<FileMetadata, MetadataStoreError> MetadataStore::read_metadata_fil
 			.size = file_size,
 			.obj_id = obj_id,
 			.replica_locations = { rep1, rep2 },
+			.created_at = created_at,
+			.modified_at = modified_at,
 		};
 	} catch (const std::out_of_range &) {
 		return std::unexpected(MetadataStoreError::MALFORMED_FILE);
@@ -164,7 +174,12 @@ std::expected<void, MetadataStoreError> MetadataStore::add_metadata(
 	if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
 	if (already_exists) return std::unexpected(MetadataStoreError::ALREADY_EXISTS);
 
+	const auto now = std::chrono::system_clock::now();
+
 	metadata.path = filename; // metadata is a copy btw
+	metadata.created_at = now;
+	metadata.modified_at = now;
+
 	auto result = write_metadata_file(filename, metadata);
 
 	if (!result) return result;
@@ -177,11 +192,15 @@ std::expected<void, MetadataStoreError> MetadataStore::add_metadata(
 std::expected<void, MetadataStoreError> MetadataStore::update_metadata(const fs::path &filename, FileMetadata metadata) {
 	if (!valid_filename(filename)) return std::unexpected(MetadataStoreError::INVALID_PATH);
 
-	if (!data_.contains(filename)) {
+	auto existing = data_.find(filename);
+
+	if (existing == data_.end()) {
 		return add_metadata(filename, std::move(metadata));
 	}
 
 	metadata.path = filename;
+	metadata.created_at = existing->second.created_at;
+	metadata.modified_at = std::chrono::system_clock::now();
 
 	auto result = write_metadata_file(filename, metadata);
 

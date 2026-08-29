@@ -15,6 +15,15 @@
 // 7 	ReadError,
 // };
 
+/**
+Final todos,
+
+READ_FILE,
+Add filename/path to metadata
+
+bytes endianness on serializer classes
+*/
+
 int main() {
 	Client client{ "cl1.yaml" };
 
@@ -36,14 +45,25 @@ int main() {
 
 	std::println("waiting");
 	std::this_thread::sleep_for(std::chrono::seconds(3));
-	std::println("renaming");
+	std::println("waiting a little bit");
 
-	// Not allowed, no `folder4/`
-	auto res4 = client.rename("folder1/coracao.txt", "folder4/pin.txt");
+	std::println("getting file stat");
 
-	if (!res4) {
-		std::println("4 Error code: {}", static_cast<int>(res4.error()));
+	auto stat1 = client.stat("folder1/coracao.txt");
+
+	std::println("folder1/coracao.txt");
+	if (!stat1) {
+		std::println("Stat failed for 'folder1/coracao.txt'. Error code: {}", static_cast<int>(stat1.error()));
 	}
+	stat1->print();
+
+	auto stat2 = client.stat("folder132");
+
+	if (!stat2) {
+		std::println("Stat failed for 'folder132'. Error code: {}", static_cast<int>(stat2.error()));
+	}
+	std::println("folder132");
+	stat2->print();
 
 	std::println();
 	std::fflush(stdout);

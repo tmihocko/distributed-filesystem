@@ -143,6 +143,9 @@ void MetadataNode::push_worker_job(Message message) {
 		case ClientJob::RENAME:
 			job_queue_.push(ClientProtocol::decode_rename_request(rpc_message));
 			break;
+		case ClientJob::STAT:
+			job_queue_.push(ClientProtocol::decode_stat_request(rpc_message));
+			break;
 		default:
 			throw std::runtime_error("Job type not handled.");
 		}

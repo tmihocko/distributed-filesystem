@@ -43,7 +43,7 @@ ClientOperation<void> Client::create_file(std::string path) {
 
 	if (!message) return std::unexpected(ClientError::Timeout);
 
-	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
+	auto rpc_message = Rpc::read_message<ClientJob>(*message);
 
 	if (rpc_message.rpc_header.request_id != request_id) return std::unexpected(ClientError::BadResponse);
 	if (rpc_message.rpc_header.kind != RpcKind::Response) return std::unexpected(ClientError::BadResponse);
@@ -91,7 +91,7 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 	const auto write_frame = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::WRITE_FILE, RpcKind::Response, metadata_node_id_));
 
 	if (!write_frame) return std::unexpected(ClientError::Timeout);
-	const auto rpc_write_response = Rpc::read_message<ClientJob>(write_frame.value());
+	const auto rpc_write_response = Rpc::read_message<ClientJob>(*write_frame);
 
 	if (!validate_rpc_header<ClientJob::WRITE_FILE, RpcKind::Response>(rpc_write_response.rpc_header, request_id)) {
 		return std::unexpected(ClientError::BadResponse);
@@ -132,7 +132,7 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 				}));
 
 		if (!chunk_frame) return std::unexpected(ClientError::Timeout);
-		auto rpc_chunk_response = Rpc::read_message<ClientJob>(chunk_frame.value());
+		auto rpc_chunk_response = Rpc::read_message<ClientJob>(*chunk_frame);
 
 		if (!validate_rpc_header<ClientJob::WRITE_CHUNK, RpcKind::Response>(rpc_chunk_response.rpc_header, request_id)) {
 			return std::unexpected(ClientError::BadResponse);
@@ -166,7 +166,7 @@ ClientOperation<void> Client::remove(std::string path) {
 
 	if (!message) return std::unexpected(ClientError::Timeout);
 
-	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
+	auto rpc_message = Rpc::read_message<ClientJob>(*message);
 
 	if (!validate_rpc_header<ClientJob::REMOVE, RpcKind::Response>(rpc_message.rpc_header, request_id)) {
 		return std::unexpected(ClientError::BadResponse);
@@ -197,7 +197,7 @@ ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
 
 	if (!message) return std::unexpected(ClientError::Timeout);
 
-	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
+	auto rpc_message = Rpc::read_message<ClientJob>(*message);
 
 	if (!validate_rpc_header<ClientJob::LIST, RpcKind::Response>(rpc_message.rpc_header, request_id)) {
 		return std::unexpected(ClientError::BadResponse);
@@ -228,7 +228,7 @@ ClientOperation<void> Client::mkdir(std::string path) {
 
 	if (!message) return std::unexpected(ClientError::Timeout);
 
-	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
+	auto rpc_message = Rpc::read_message<ClientJob>(*message);
 
 	if (!validate_rpc_header<ClientJob::MKDIR, RpcKind::Response>(rpc_message.rpc_header, request_id)) {
 		return std::unexpected(ClientError::BadResponse);
@@ -260,7 +260,7 @@ ClientOperation<void> Client::rename(std::string old_path, std::string new_path)
 
 	if (!message) return std::unexpected(ClientError::Timeout);
 
-	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
+	auto rpc_message = Rpc::read_message<ClientJob>(*message);
 
 	if (!validate_rpc_header<ClientJob::RENAME, RpcKind::Response>(rpc_message.rpc_header, request_id)) {
 		return std::unexpected(ClientError::BadResponse);
@@ -275,8 +275,35 @@ ClientOperation<void> Client::rename(std::string old_path, std::string new_path)
 	}
 }
 
-ClientOperation<FileStats> Client::stat(std::string path) {
-	return std::unexpected(ClientError::NotImplemented);
+ClientOperation<FileStat> Client::stat(std::string path) {
+	auto request_id = next_id();
+
+	StatRequest request{
+		.path = path,
+		.context = {}
+	};
+
+	Frame frame = ClientProtocol::encode_stat_request(request_id, request);
+
+	network_.send(metadata_node_id_, std::move(frame));
+
+	auto message = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::STAT, RpcKind::Response, metadata_node_id_));
+
+	if (!message) return std::unexpected(ClientError::Timeout);
+
+	auto rpc_message = Rpc::read_message<ClientJob>(*message);
+
+	if (!validate_rpc_header<ClientJob::STAT, RpcKind::Response>(rpc_message.rpc_header, request_id)) {
+		return std::unexpected(ClientError::BadResponse);
+	}
+
+	auto response = ClientProtocol::decode_stat_response(rpc_message);
+
+	if (response.status == ClientStatus::Success) {
+		return response.stat;
+	} else {
+		return status_to_error<FileStat>(response.status);
+	}
 }
 
 std::uint64_t Client::next_id() {

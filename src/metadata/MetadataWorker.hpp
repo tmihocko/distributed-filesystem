@@ -21,7 +21,7 @@ struct PendingWrite {
 };
 
 using ClientEvent =
-	std::variant<CreateFileRequest, WriteFileRequest, WriteChunkRequest, RemoveRequest, ListRequest, MakeDirRequest, RenameRequest>;
+	std::variant<CreateFileRequest, WriteFileRequest, WriteChunkRequest, RemoveRequest, ListRequest, MakeDirRequest, RenameRequest, StatRequest>;
 
 class MetadataWorker {
   private:
@@ -439,6 +439,55 @@ class MetadataWorker {
 			req.context.request_id,
 			RenameResponse{
 				.status = status,
+				.context = req.context,
+			});
+
+		network_.send(req.context.sender.id, std::move(frame));
+	}
+
+	void handle(StatRequest req) {
+		auto metadata = store_.get_metadata(req.path);
+
+		ClientStatus status = get_client_status(metadata);
+		FileStat stats{};
+
+		if (metadata) {
+			status = ClientStatus::Success;
+
+			stats = FileStat{
+				.is_directory = false,
+				.storage_nodes = metadata->replica_locations,
+				.object_id = metadata->obj_id,
+				.size = metadata->size,
+				.created_at = metadata->created_at,
+				.modified_at = metadata->modified_at,
+			};
+		} else if (metadata.error() == MetadataStoreError::NOT_FOUND) {
+			auto directory = store_.list(req.path);
+
+			if (directory) {
+				status = ClientStatus::Success;
+
+				stats = FileStat{
+					.is_directory = true,
+					.storage_nodes = {},
+					.object_id = {},
+					.size = 0,
+					.created_at = {},
+					.modified_at = {},
+				};
+			} else {
+				status = get_client_status(directory);
+			}
+		} else {
+			status = get_client_status(metadata);
+		}
+
+		Frame frame = ClientProtocol::encode_stat_response(
+			req.context.request_id,
+			StatResponse{
+				.status = status,
+				.stat = stats,
 				.context = req.context,
 			});
 
