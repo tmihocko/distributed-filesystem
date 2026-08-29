@@ -1,7 +1,3 @@
-/**
-
-TODO: leader_ is still here after removing raft, store metadata address/id and use that instead
-*/
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 #include "network/Network.hpp"
@@ -12,6 +8,9 @@ TODO: leader_ is still here after removing raft, store metadata address/id and u
 #include <vector>
 #include "rpc/ClientProtocol.hpp"
 #include "rpc/Rpc.hpp"
+
+// todo:
+// rename, stat, read_file
 
 template <typename T>
 using ClientOperation = std::expected<T, ClientError>;
@@ -30,8 +29,10 @@ class Client {
 
 	ClientOperation<void> write_file(std::string local_path, std::string path);
 
+	// Doesn't allow recursive remove (rm -rf), add later
 	ClientOperation<void> remove(std::string path);
 
+	[[nodiscard]]
 	ClientOperation<std::vector<FileInfo>> list(std::string directory = "/");
 
 	ClientOperation<void> mkdir(std::string path);

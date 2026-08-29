@@ -105,6 +105,15 @@ struct WriteChunkResponse {
 	RequestContext context;
 };
 
+struct RemoveRequest {
+	std::string path;
+	RequestContext context;
+};
+
+struct RemoveResponse {
+	ClientStatus status;
+};
+
 struct ListRequest {
 	std::string path;
 	RequestContext context;
@@ -147,6 +156,14 @@ WriteChunkResponse decode_write_chunk_response(const ClientRpcMessage &message);
 
 Frame encode_write_file_response(std::uint64_t request_id, const WriteFileResponse &response);
 WriteFileResponse decode_write_file_response(const ClientRpcMessage &message);
+
+//
+
+Frame encode_remove_request(std::uint64_t request_id, const RemoveRequest &response);
+RemoveRequest decode_remove_request(const ClientRpcMessage &message);
+
+Frame encode_remove_response(std::uint64_t request_id, const RemoveResponse &response);
+RemoveResponse decode_remove_response(const ClientRpcMessage &message);
 
 //
 

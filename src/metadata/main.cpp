@@ -24,10 +24,3 @@ int main(int argc, const char *argv[]) {
 	std::latch forever{ 1 };
 	forever.wait();
 }
-
-/**
-
-TODO:
-
-
-*/

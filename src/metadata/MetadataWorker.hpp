@@ -8,6 +8,7 @@ Does all jobs given to metadata node
 #include "network/Node.hpp"
 #include "rpc/ClientProtocol.hpp"
 #include "ObjectId.hpp"
+#include "rpc/Rpc.hpp"
 #include "rpc/StorageProtocol.hpp"
 
 struct PendingWrite {
@@ -19,9 +20,21 @@ struct PendingWrite {
 	std::array<NodeId, 2> replicas;
 };
 
-using ClientEvent = std::variant<CreateFileRequest, WriteFileRequest, WriteChunkRequest, ListRequest, MakeDirRequest>;
+using ClientEvent = std::variant<CreateFileRequest, WriteFileRequest, WriteChunkRequest, RemoveRequest, ListRequest, MakeDirRequest>;
 
 class MetadataWorker {
+  private:
+	template <typename Response, typename Encoder>
+	auto make_responder(RequestContext context, Response response, Encoder encoder) {
+		return [this, context = std::move(context), response = std::move(response), encoder](auto status) mutable {
+			response.status = status;
+
+			Frame frame = encoder(context.request_id, response);
+
+			network_.send(context.sender.id, std::move(frame));
+		};
+	}
+
   public:
 	// Metadata only operation
 	void handle(CreateFileRequest req) {
@@ -46,16 +59,7 @@ class MetadataWorker {
 	}
 
 	void handle(WriteFileRequest req) {
-		auto respond = [&](ClientStatus status) {
-			Frame frame = ClientProtocol::encode_write_file_response(
-				req.context.request_id,
-				WriteFileResponse{
-					.status = status,
-					.context = req.context,
-				});
-
-			network_.send(req.context.sender.id, std::move(frame));
-		};
+		auto respond = make_responder(req.context, WriteFileResponse{}, ClientProtocol::encode_write_file_response);
 		const std::uint64_t expected_chunks = req.file_size / CHUNK_SIZE + (req.file_size % CHUNK_SIZE != 0);
 
 		if (expected_chunks != req.chunk_count) {
@@ -66,7 +70,7 @@ class MetadataWorker {
 		auto metadata_result = store_.get_metadata(req.path);
 
 		if (!metadata_result && metadata_result.error() != MetadataStoreError::NOT_FOUND) {
-			respond(ClientStatus::ServerError); // Currently requires create_file to be called first, change this later
+			respond(ClientStatus::ServerError); // Requires create_file to be called first, double check this later !TODO:
 			return;
 		}
 
@@ -77,8 +81,9 @@ class MetadataWorker {
 			.replica_locations = { "", "" },
 		};
 
+		// Corrupt metadata: CREATE_FILE should assign this.
 		if (metadata.obj_id.empty()) {
-			respond(ClientStatus::ServerError); // Corrupt metadata: CREATE_FILE should assign this.
+			respond(ClientStatus::ServerError);
 			return;
 		}
 
@@ -101,8 +106,8 @@ class MetadataWorker {
 			metadata.size = 0;
 
 			const auto update_result = store_.update_metadata(req.path, std::move(metadata));
-
 			respond(update_result.has_value() ? ClientStatus::Success : ClientStatus::ServerError);
+
 			return;
 		}
 
@@ -172,17 +177,13 @@ class MetadataWorker {
 	}
 
 	void handle(WriteChunkRequest req) {
-		auto respond = [&](ClientStatus status) {
-			Frame frame = ClientProtocol::encode_write_chunk_response(
-				req.context.request_id,
-				WriteChunkResponse{
-					.chunk_index = req.chunk_index,
-					.status = status,
-					.context = req.context,
-				});
-
-			network_.send(req.context.sender.id, std::move(frame));
-		};
+		auto respond = make_responder(
+			req.context,
+			WriteChunkResponse{
+				.chunk_index = req.chunk_index,
+				.context = req.context,
+			},
+			ClientProtocol::encode_write_chunk_response);
 
 		auto client_it = pending_writes_.find(req.context.sender.id);
 		if (client_it == pending_writes_.end()) {
@@ -237,29 +238,18 @@ class MetadataWorker {
 		bool replicas_succeeded = true;
 
 		for (const auto &replica : write.replicas) {
-			auto response_message = network_.receive_if(storage_request_timeout_, [&](const Message &message) {
-				if (message.sender.id != replica || !Rpc::message_is<StorageJob, RpcKind::Response>(message)) {
-					return false;
-				}
-
-				try {
-					BinaryReader reader{ message.buffer };
-
-					const auto [request_id, job, kind, chunk_index] =
-						reader.read<std::uint64_t, StorageJob, RpcKind, std::uint32_t>();
-
-					return request_id == req.context.request_id &&
-						   job == StorageJob::PUT &&
-						   kind == RpcKind::Response &&
-						   chunk_index == req.chunk_index;
-				} catch (const std::exception &) {
-					return false;
-				}
-			});
+			auto response_message = network_.receive_if(
+				storage_request_timeout_,
+				Rpc::make_message_is(
+					req.context.request_id,
+					StorageJob::PUT,
+					RpcKind::Response,
+					replica,
+					[expected_chunk = req.chunk_index](BinaryReader &reader) { return reader.read<std::uint32_t>() == expected_chunk; }));
 
 			if (!response_message) {
 				replicas_succeeded = false;
-				return;
+				continue;
 			}
 
 			const auto rpc_response = Rpc::read_message<StorageJob>(std::move(*response_message));
@@ -299,6 +289,104 @@ class MetadataWorker {
 
 		discard_write(); // Not really discard, more like destruct
 		respond(final_status);
+	}
+
+	void handle(RemoveRequest req) {
+		auto respond = make_responder(req.context, RemoveResponse{}, ClientProtocol::encode_remove_response);
+		// Fail if file at path is currently being written
+		for (const auto &client_writes : pending_writes_) {
+			for (const auto &pending_entry : client_writes.second) {
+				if (pending_entry.second.path == req.path) {
+					respond(ClientStatus::ServerError);
+					return;
+				}
+			}
+		}
+
+		auto metadata_result = store_.get_metadata(req.path);
+
+		if (!metadata_result) {
+			if (metadata_result.error() != MetadataStoreError::NOT_FOUND) {
+				respond(get_client_status(metadata_result));
+				return;
+			} else {
+				const auto directory_result = store_.remove_directory(req.path);
+
+				respond(get_client_status(directory_result));
+				return;
+			}
+		}
+
+		const FileMetadata metadata = std::move(*metadata_result);
+		const auto &replicas = metadata.replica_locations;
+
+		const bool first_bound = !replicas[0].empty();
+		const bool second_bound = !replicas[1].empty();
+
+		// Validate replica locations are normal
+		if (first_bound != second_bound || (first_bound && replicas[0] == replicas[1]) || metadata.obj_id.empty()) {
+			respond(ClientStatus::ServerError);
+			return;
+		}
+
+		// If file is empty/only exists on metadata node
+		if (!first_bound) {
+			const auto result = store_.remove_metadata(req.path);
+			respond(get_client_status(result));
+			return;
+		}
+
+		// Put the availability check here.
+		for (const NodeId &replica : replicas) {
+			const auto node = storage_nodes_.find(replica);
+
+			if (node == storage_nodes_.end() || !node->second.available) {
+				respond(ClientStatus::ServerError);
+				return;
+			}
+		}
+
+		const std::uint64_t storage_request_id = next_storage_request_id();
+
+		DeleteRequest delete_request{
+			.object_id = metadata.obj_id,
+			.context = {},
+		};
+
+		for (const NodeId &replica : replicas) {
+			network_.send(replica, StorageProtocol::encode_delete_request(storage_request_id, delete_request));
+		}
+
+		bool replicas_succeeded = true;
+		for (const NodeId &replica : replicas) {
+
+			auto message = network_.receive_if(storage_request_timeout_, Rpc::make_message_is(storage_request_id, StorageJob::DELETE, RpcKind::Response, replica));
+
+			if (!message) {
+				replicas_succeeded = false;
+				continue;
+			}
+
+			try {
+				auto rpc_response = Rpc::read_message<StorageJob>(std::move(*message));
+
+				const DeleteResponse response = StorageProtocol::decode_delete_response(rpc_response);
+
+				if (response.status != StorageStatus::Success) {
+					replicas_succeeded = false;
+				}
+			} catch (const std::exception &) {
+				replicas_succeeded = false;
+			}
+		}
+		if (!replicas_succeeded) {
+			// Keep metadata so the client can retry deletion.
+			respond(ClientStatus::ServerError);
+			return;
+		}
+
+		const auto result = store_.remove_metadata(req.path);
+		respond(get_client_status(result));
 	}
 
 	void handle(ListRequest req) {
@@ -363,6 +451,12 @@ class MetadataWorker {
 			}
 		}
 	}
+
+	std::uint64_t next_storage_request_id() {
+		return ++current_storage_request_id_;
+	}
+
+	std::uint64_t current_storage_request_id_ = 0;
 
 	NodeConfig config_;
 	Network<NodeRole::METADATA> &network_;

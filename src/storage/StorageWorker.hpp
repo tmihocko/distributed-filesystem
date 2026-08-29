@@ -28,6 +28,46 @@ class StorageWorker {
 		network_.send(req.context.sender.id, std::move(response));
 	}
 
+	void handle(DeleteRequest req) {
+		namespace fs = std::filesystem;
+
+		auto respond = [&](StorageStatus status) {
+			Frame frame = StorageProtocol::encode_delete_response(
+				req.context.request_id,
+				DeleteResponse{ .status = status });
+
+			network_.send(req.context.sender.id, std::move(frame));
+		};
+
+		if (!valid_object_id(req.object_id)) {
+			respond(StorageStatus::InvalidRequest);
+			return;
+		}
+
+		const fs::path final_path = objects_directory_ / req.object_id;
+
+		fs::path tmp_path = final_path;
+		tmp_path += ".tmp";
+
+		std::error_code ec;
+
+		fs::remove(final_path, ec);
+		if (ec) {
+			respond(StorageStatus::WriteError);
+			return;
+		}
+
+		fs::remove(tmp_path, ec);
+		if (ec) {
+			respond(StorageStatus::WriteError);
+			return;
+		}
+
+		next_chunks_.erase(req.object_id);
+
+		respond(StorageStatus::Success);
+	}
+
 	StorageWorker(const NodeConfig &config, Network<NodeRole::STORAGE> &network)
 		: objects_directory_(std::filesystem::path(config.data_directory) / "objects"), network_(network) {
 		if (config.data_directory.empty()) {

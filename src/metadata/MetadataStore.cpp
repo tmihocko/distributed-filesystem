@@ -28,7 +28,7 @@ std::expected<void, MetadataStoreError> MetadataStore::write_metadata_file(const
 	const std::streamsize length = writer.length();
 	auto data = writer.move_data();
 
-	const fs::path final_path = directory_ / filename; // fix rn it does like metadata/obj/.tmp
+	const fs::path final_path = directory_ / filename;
 
 	std::error_code ec;
 	fs::create_directories(final_path.parent_path(), ec);
@@ -243,6 +243,30 @@ std::expected<void, MetadataStoreError> MetadataStore::make_directory(const fs::
 	}
 
 	if (!created) return std::unexpected(MetadataStoreError::ALREADY_EXISTS);
+
+	return {};
+}
+
+std::expected<void, MetadataStoreError> MetadataStore::remove_directory(const std::filesystem::path &path) {
+	if (!valid_filename(path)) return std::unexpected(MetadataStoreError::INVALID_PATH);
+
+	const fs::path final_path = directory_ / path.relative_path();
+
+	std::error_code ec;
+
+	const bool exists = fs::exists(final_path, ec);
+
+	if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+	if (!exists) return std::unexpected(MetadataStoreError::NOT_FOUND);
+
+	const bool is_directory = fs::is_directory(final_path, ec);
+
+	if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+	if (!is_directory) return std::unexpected(MetadataStoreError::INVALID_PATH);
+
+	const bool removed = fs::remove(final_path, ec);
+
+	if (ec || !removed) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
 
 	return {};
 }

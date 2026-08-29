@@ -39,7 +39,7 @@ ClientOperation<void> Client::create_file(std::string path) {
 
 	network_.send(metadata_node_id_, std::move(frame));
 
-	auto message = network_.receive_if(TIMEOUT, &Rpc::message_is<ClientJob, RpcKind::Response>);
+	auto message = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::CREATE_FILE, RpcKind::Response, metadata_node_id_));
 
 	if (!message) return std::unexpected(ClientError::Timeout);
 
@@ -88,7 +88,8 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 
 	network_.send(metadata_node_id_, write_req_frame);
 
-	const auto write_frame = network_.receive_if(TIMEOUT, &Rpc::message_is<ClientJob, RpcKind::Response>);
+	const auto write_frame = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::WRITE_FILE, RpcKind::Response, metadata_node_id_));
+
 	if (!write_frame) return std::unexpected(ClientError::Timeout);
 	const auto rpc_write_response = Rpc::read_message<ClientJob>(write_frame.value());
 
@@ -122,7 +123,14 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 
 		network_.send(metadata_node_id_, frame);
 
-		const auto chunk_frame = network_.receive_if(TIMEOUT, &Rpc::message_is<ClientJob, RpcKind::Response>);
+		const auto chunk_frame = network_.receive_if(
+			TIMEOUT,
+			Rpc::make_message_is(
+				request_id, ClientJob::WRITE_CHUNK, RpcKind::Response, metadata_node_id_,
+				[chunk_index](BinaryReader &reader) {
+					return reader.read<std::uint32_t>() == chunk_index;
+				}));
+
 		if (!chunk_frame) return std::unexpected(ClientError::Timeout);
 		auto rpc_chunk_response = Rpc::read_message<ClientJob>(chunk_frame.value());
 
@@ -143,7 +151,34 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 }
 
 ClientOperation<void> Client::remove(std::string path) {
-	return std::unexpected(ClientError::NotImplemented);
+	auto request_id = next_id();
+
+	RemoveRequest request{
+		.path = path,
+		.context = {},
+	};
+
+	auto frame = ClientProtocol::encode_remove_request(request_id, request);
+
+	network_.send(metadata_node_id_, frame);
+
+	auto message = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::REMOVE, RpcKind::Response, metadata_node_id_));
+
+	if (!message) return std::unexpected(ClientError::Timeout);
+
+	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
+
+	if (!validate_rpc_header<ClientJob::REMOVE, RpcKind::Response>(rpc_message.rpc_header, request_id)) {
+		return std::unexpected(ClientError::BadResponse);
+	}
+
+	auto response = ClientProtocol::decode_remove_response(rpc_message);
+
+	if (response.status == ClientStatus::Success) {
+		return {};
+	} else {
+		return status_to_error<void>(response.status);
+	}
 }
 
 ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
@@ -158,7 +193,7 @@ ClientOperation<std::vector<FileInfo>> Client::list(std::string directory) {
 
 	network_.send(metadata_node_id_, std::move(frame));
 
-	auto message = network_.receive_if(TIMEOUT, &Rpc::message_is<ClientJob, RpcKind::Response>);
+	auto message = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::LIST, RpcKind::Response, metadata_node_id_));
 
 	if (!message) return std::unexpected(ClientError::Timeout);
 
@@ -189,7 +224,7 @@ ClientOperation<void> Client::mkdir(std::string path) {
 
 	network_.send(metadata_node_id_, std::move(frame));
 
-	auto message = network_.receive_if(TIMEOUT, &Rpc::message_is<ClientJob, RpcKind::Response>);
+	auto message = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::MKDIR, RpcKind::Response, metadata_node_id_));
 
 	if (!message) return std::unexpected(ClientError::Timeout);
 

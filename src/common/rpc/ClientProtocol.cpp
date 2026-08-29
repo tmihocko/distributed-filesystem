@@ -62,6 +62,61 @@ CreateFileResponse ClientProtocol::decode_create_file_response(const ClientRpcMe
 	};
 }
 
+Frame ClientProtocol::encode_remove_request(
+	std::uint64_t request_id,
+	const RemoveRequest &request) {
+	BinaryWriter writer;
+	writer.write(request.path);
+
+	return Rpc::make_frame(
+		request_id,
+		ClientJob::REMOVE,
+		RpcKind::Request,
+		writer.move_data());
+}
+
+RemoveRequest ClientProtocol::decode_remove_request(
+	const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::REMOVE, RpcKind::Request>(message);
+
+	BinaryReader reader{ message.body };
+	auto path = reader.read_string();
+
+	reader.assert_at_end();
+
+	return RemoveRequest{
+		.path = std::move(path),
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame ClientProtocol::encode_remove_response(
+	std::uint64_t request_id,
+	const RemoveResponse &response) {
+	BinaryWriter writer;
+	writer.write(response.status);
+
+	return Rpc::make_frame(
+		request_id,
+		ClientJob::REMOVE,
+		RpcKind::Response,
+		writer.move_data());
+}
+
+RemoveResponse ClientProtocol::decode_remove_response(
+	const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::REMOVE, RpcKind::Response>(message);
+
+	BinaryReader reader{ message.body };
+	const auto status = reader.read<ClientStatus>();
+
+	reader.assert_at_end();
+
+	return RemoveResponse{
+		.status = status,
+	};
+}
+
 Frame ClientProtocol::encode_list_request(std::uint64_t request_id, const ListRequest &request) {
 	BinaryWriter writer;
 

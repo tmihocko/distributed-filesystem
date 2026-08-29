@@ -10,7 +10,7 @@
 #include <stop_token>
 #include <thread>
 
-using StorageEvent = std::variant<PutRequest>;
+using StorageEvent = std::variant<PutRequest, DeleteRequest>;
 
 class StorageNode {
   public:
@@ -58,6 +58,12 @@ class StorageNode {
 
 		case StorageJob::PUT:
 			job_queue_.push(StorageProtocol::decode_put_request(rpc_message));
+			break;
+		case StorageJob::DELETE:
+			job_queue_.push(StorageProtocol::decode_delete_request(rpc_message));
+			break;
+		case StorageJob::GET:
+			// job_queue_.push(StorageProtocol::decode_get_request(rpc_message));
 			break;
 		default:
 			throw std::runtime_error("Job type not handled.");

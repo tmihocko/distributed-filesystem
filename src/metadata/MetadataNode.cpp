@@ -125,17 +125,20 @@ void MetadataNode::push_worker_job(Message message) {
 		case ClientJob::CREATE_FILE:
 			job_queue_.push(ClientProtocol::decode_create_file_request(rpc_message));
 			break;
-		case ClientJob::LIST:
-			job_queue_.push(ClientProtocol::decode_list_request(rpc_message));
-			break;
-		case ClientJob::MKDIR:
-			job_queue_.push(ClientProtocol::decode_mkdir_request(rpc_message));
-			break;
 		case ClientJob::WRITE_FILE:
 			job_queue_.push(ClientProtocol::decode_write_file_request(rpc_message));
 			break;
 		case ClientJob::WRITE_CHUNK:
 			job_queue_.push(ClientProtocol::decode_write_chunk_request(rpc_message));
+			break;
+		case ClientJob::REMOVE:
+			job_queue_.push(ClientProtocol::decode_remove_request(rpc_message));
+			break;
+		case ClientJob::LIST:
+			job_queue_.push(ClientProtocol::decode_list_request(rpc_message));
+			break;
+		case ClientJob::MKDIR:
+			job_queue_.push(ClientProtocol::decode_mkdir_request(rpc_message));
 			break;
 		default:
 			throw std::runtime_error("Job type not handled.");

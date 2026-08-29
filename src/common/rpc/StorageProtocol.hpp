@@ -44,15 +44,30 @@ struct PutResponse {
 	StorageStatus status;
 };
 
+struct DeleteRequest {
+	std::string object_id;
+	RequestContext context;
+};
+
+struct DeleteResponse {
+	StorageStatus status;
+};
+
 namespace StorageProtocol {
 
 Frame encode_put_request(std::uint64_t request_id, const PutRequest &request);
-
 PutRequest decode_put_request(const StorageRpcMessage &message);
 
 Frame encode_put_response(std::uint64_t request_id, const PutResponse &response);
-
 PutResponse decode_put_response(const StorageRpcMessage &message);
+
+//
+
+Frame encode_delete_request(std::uint64_t request_id, const DeleteRequest &request);
+DeleteRequest decode_delete_request(const StorageRpcMessage &message);
+
+Frame encode_delete_response(std::uint64_t request_id, const DeleteResponse &response);
+DeleteResponse decode_delete_response(const StorageRpcMessage &message);
 
 } // namespace StorageProtocol
 

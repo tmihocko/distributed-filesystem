@@ -111,6 +111,40 @@ bool message_is(const Message &message) {
 	}
 }
 
+struct MatchAnyBody {
+	bool operator()(BinaryReader &) const noexcept {
+		return true;
+	}
+};
+
+template <RpcJob Job, typename BodyPredicate = MatchAnyBody>
+auto make_message_is(std::uint64_t request_id, Job job, RpcKind kind, NodeId sender, BodyPredicate body_predicate = {}) {
+	return [request_id, job, kind, sender = std::move(sender), body_predicate = std::move(body_predicate)](const Message &message) mutable {
+		if (message.sender.id != sender ||
+			message.header.magic != HEADER_MAGIC ||
+			message.header.type != RpcTraits<Job>::message_type ||
+			message.header.length != message.buffer.size()) {
+			return false;
+		}
+
+		try {
+			BinaryReader reader{ message.buffer };
+
+			const auto [actual_request_id, actual_job, actual_kind] = reader.read<std::uint64_t, Job, RpcKind>();
+
+			if (actual_request_id != request_id ||
+				actual_job != job ||
+				actual_kind != kind) {
+				return false;
+			}
+
+			return body_predicate(reader);
+		} catch (const std::exception &) {
+			return false;
+		}
+	};
+}
+
 } // namespace Rpc
 
 #endif // RPC_HPP

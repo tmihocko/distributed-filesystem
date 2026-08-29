@@ -1,4 +1,5 @@
 #include "StorageProtocol.hpp"
+#include "Serializer.hpp"
 #include "rpc/ClientProtocol.hpp"
 
 template <StorageJob Job, RpcKind Kind>
@@ -69,6 +70,55 @@ PutResponse StorageProtocol::decode_put_response(
 	return PutResponse{
 		.chunk_index = chunk_index,
 		.size_available = size_available,
+		.status = status,
+	};
+}
+
+Frame StorageProtocol::encode_delete_request(std::uint64_t request_id, const DeleteRequest &request) {
+	BinaryWriter writer;
+	writer.write(request.object_id);
+
+	return Rpc::make_frame(
+		request_id,
+		StorageJob::DELETE,
+		RpcKind::Request,
+		writer.move_data());
+}
+
+DeleteRequest StorageProtocol::decode_delete_request(const StorageRpcMessage &message) {
+	validate_storage_message<StorageJob::DELETE, RpcKind::Request>(message);
+	BinaryReader reader{ message.body };
+
+	const auto object_id = reader.read<std::string>();
+
+	reader.assert_at_end();
+
+	return DeleteRequest{
+		.object_id = object_id,
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame StorageProtocol::encode_delete_response(std::uint64_t request_id, const DeleteResponse &response) {
+	BinaryWriter writer;
+	writer.write(response.status);
+
+	return Rpc::make_frame(
+		request_id,
+		StorageJob::DELETE,
+		RpcKind::Response,
+		writer.move_data());
+}
+
+DeleteResponse StorageProtocol::decode_delete_response(const StorageRpcMessage &message) {
+	validate_storage_message<StorageJob::DELETE, RpcKind::Response>(message);
+
+	BinaryReader reader{ message.body };
+	const auto status = reader.read<StorageStatus>();
+
+	reader.assert_at_end();
+
+	return DeleteResponse{
 		.status = status,
 	};
 }
