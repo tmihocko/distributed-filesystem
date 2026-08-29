@@ -16,11 +16,7 @@ Frame ClientProtocol::encode_create_file_request(std::uint64_t request_id, const
 
 	writer.write(request.path);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::CREATE_FILE,
-		RpcKind::Request,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::CREATE_FILE, RpcKind::Request, writer.move_data());
 }
 
 CreateFileRequest ClientProtocol::decode_create_file_request(const ClientRpcMessage &message) {
@@ -41,11 +37,7 @@ Frame ClientProtocol::encode_create_file_response(std::uint64_t request_id, cons
 
 	writer.write(response.status);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::CREATE_FILE,
-		RpcKind::Response,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::CREATE_FILE, RpcKind::Response, writer.move_data());
 }
 
 CreateFileResponse ClientProtocol::decode_create_file_response(const ClientRpcMessage &message) {
@@ -68,11 +60,7 @@ Frame ClientProtocol::encode_remove_request(
 	BinaryWriter writer;
 	writer.write(request.path);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::REMOVE,
-		RpcKind::Request,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::REMOVE, RpcKind::Request, writer.move_data());
 }
 
 RemoveRequest ClientProtocol::decode_remove_request(
@@ -96,11 +84,7 @@ Frame ClientProtocol::encode_remove_response(
 	BinaryWriter writer;
 	writer.write(response.status);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::REMOVE,
-		RpcKind::Response,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::REMOVE, RpcKind::Response, writer.move_data());
 }
 
 RemoveResponse ClientProtocol::decode_remove_response(
@@ -182,11 +166,7 @@ Frame ClientProtocol::encode_mkdir_request(std::uint64_t request_id, const MakeD
 
 	writer.write(response.path);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::MKDIR,
-		RpcKind::Request,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::MKDIR, RpcKind::Request, writer.move_data());
 }
 
 MakeDirRequest ClientProtocol::decode_mkdir_request(const ClientRpcMessage &message) {
@@ -207,11 +187,7 @@ Frame ClientProtocol::encode_mdkir_response(std::uint64_t request_id, const Make
 
 	writer.write(response.status);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::MKDIR,
-		RpcKind::Response,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::MKDIR, RpcKind::Response, writer.move_data());
 }
 
 MakeDirResponse ClientProtocol::decode_mkdir_response(const ClientRpcMessage &message) {
@@ -232,11 +208,7 @@ Frame ClientProtocol::encode_write_file_request(std::uint64_t request_id, const 
 
 	writer.write(request.file_size, request.chunk_count, request.path);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::WRITE_FILE,
-		RpcKind::Request,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::WRITE_FILE, RpcKind::Request, writer.move_data());
 }
 
 WriteFileRequest ClientProtocol::decode_write_file_request(const ClientRpcMessage &message) {
@@ -263,11 +235,7 @@ Frame ClientProtocol::encode_write_chunk_request(
 
 	writer.write(request.chunk_index).write_bytes(request.data);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::WRITE_CHUNK,
-		RpcKind::Request,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::WRITE_CHUNK, RpcKind::Request, writer.move_data());
 }
 
 WriteChunkRequest ClientProtocol::decode_write_chunk_request(
@@ -296,11 +264,7 @@ Frame ClientProtocol::encode_write_chunk_response(
 
 	writer.write(response.chunk_index, response.status);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::WRITE_CHUNK,
-		RpcKind::Response,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::WRITE_CHUNK, RpcKind::Response, writer.move_data());
 }
 
 WriteChunkResponse ClientProtocol::decode_write_chunk_response(const ClientRpcMessage &message) {
@@ -323,11 +287,7 @@ Frame ClientProtocol::encode_write_file_response(std::uint64_t request_id, const
 	BinaryWriter writer;
 	writer.write(response.status);
 
-	return Rpc::make_frame(
-		request_id,
-		ClientJob::WRITE_FILE,
-		RpcKind::Response,
-		writer.move_data());
+	return Rpc::make_frame(request_id, ClientJob::WRITE_FILE, RpcKind::Response, writer.move_data());
 }
 
 WriteFileResponse ClientProtocol::decode_write_file_response(const ClientRpcMessage &message) {
@@ -339,6 +299,49 @@ WriteFileResponse ClientProtocol::decode_write_file_response(const ClientRpcMess
 	reader.assert_at_end();
 
 	return WriteFileResponse{
+		.status = status,
+		.context = RequestContext::from(message),
+	};
+}
+
+//
+
+Frame ClientProtocol::encode_rename_request(std::uint64_t request_id, const RenameRequest &request) {
+	BinaryWriter writer;
+	writer.write(request.old_path, request.new_path);
+
+	return Rpc::make_frame(request_id, ClientJob::RENAME, RpcKind::Request, writer.move_data());
+}
+RenameRequest ClientProtocol::decode_rename_request(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::RENAME, RpcKind::Request>(message);
+
+	BinaryReader reader{ message.body };
+	const auto [old_path, new_path] = reader.read<std::string, std::string>();
+
+	reader.assert_at_end();
+
+	return RenameRequest{
+		.old_path = old_path,
+		.new_path = new_path,
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame ClientProtocol::encode_rename_response(std::uint64_t request_id, const RenameResponse &response) {
+	BinaryWriter writer;
+	writer.write(response.status);
+
+	return Rpc::make_frame(request_id, ClientJob::RENAME, RpcKind::Response, writer.move_data());
+}
+RenameResponse ClientProtocol::decode_rename_response(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::RENAME, RpcKind::Response>(message);
+
+	BinaryReader reader{ message.body };
+	const auto status = reader.read<ClientStatus>();
+
+	reader.assert_at_end();
+
+	return RenameResponse{
 		.status = status,
 		.context = RequestContext::from(message),
 	};

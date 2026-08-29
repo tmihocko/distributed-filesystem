@@ -6,6 +6,7 @@ Client--Metadata RPC
 #ifndef CLIENTPROTOCOL_HPP
 #define CLIENTPROTOCOL_HPP
 #include <cstdint>
+#include <string>
 #include "Rpc.hpp"
 #include "network/Node.hpp"
 
@@ -135,6 +136,18 @@ struct MakeDirResponse {
 	RequestContext context;
 };
 
+//
+
+struct RenameRequest {
+	std::string old_path;
+	std::string new_path;
+	RequestContext context;
+};
+struct RenameResponse {
+	ClientStatus status;
+	RequestContext context;
+};
+
 namespace ClientProtocol {
 
 Frame encode_create_file_request(std::uint64_t request_id, const CreateFileRequest &request);
@@ -182,6 +195,12 @@ Frame encode_mdkir_response(std::uint64_t request_id, const MakeDirResponse &res
 MakeDirResponse decode_mkdir_response(const ClientRpcMessage &message);
 
 //
+
+Frame encode_rename_request(std::uint64_t request_id, const RenameRequest &response);
+RenameRequest decode_rename_request(const ClientRpcMessage &message);
+
+Frame encode_rename_response(std::uint64_t request_id, const RenameResponse &response);
+RenameResponse decode_rename_response(const ClientRpcMessage &message);
 
 } // namespace ClientProtocol
 

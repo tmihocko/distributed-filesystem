@@ -287,3 +287,19 @@ std::expected<std::vector<FileInfo>, MetadataStoreError> MetadataStore::list(con
 
 	return list;
 }
+
+std::expected<void, MetadataStoreError> MetadataStore::rename(const std::filesystem::path &old_path, const std::filesystem::path &new_path) {
+	std::error_code ec;
+
+	const auto old_final_path = directory_ / old_path.relative_path();
+	const auto new_final_path = directory_ / new_path.relative_path();
+
+	if (!fs::exists(old_final_path, ec)) return std::unexpected(MetadataStoreError::NOT_FOUND);
+	if (ec) return std::unexpected(MetadataStoreError::READ_FAILURE);
+
+	fs::rename(old_final_path, new_final_path, ec);
+
+	if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+
+	return {};
+}

@@ -60,6 +60,8 @@ class MetadataStore {
 	[[nodiscard]]
 	std::expected<std::vector<FileInfo>, MetadataStoreError> list(const std::filesystem::path &path);
 
+	std::expected<void, MetadataStoreError> rename(const std::filesystem::path &old_path, const std::filesystem::path &new_path);
+
   private:
 	// Add to disk
 	std::expected<void, MetadataStoreError> write_metadata_file(const std::filesystem::path &filename, const FileMetadata &metadata);

@@ -244,7 +244,35 @@ ClientOperation<void> Client::mkdir(std::string path) {
 }
 
 ClientOperation<void> Client::rename(std::string old_path, std::string new_path) {
-	return std::unexpected(ClientError::NotImplemented);
+	auto request_id = next_id();
+
+	RenameRequest request{
+		.old_path = old_path,
+		.new_path = new_path,
+		.context = {}
+	};
+
+	Frame frame = ClientProtocol::encode_rename_request(request_id, request);
+
+	network_.send(metadata_node_id_, std::move(frame));
+
+	auto message = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::RENAME, RpcKind::Response, metadata_node_id_));
+
+	if (!message) return std::unexpected(ClientError::Timeout);
+
+	auto rpc_message = Rpc::read_message<ClientJob>(message.value());
+
+	if (!validate_rpc_header<ClientJob::RENAME, RpcKind::Response>(rpc_message.rpc_header, request_id)) {
+		return std::unexpected(ClientError::BadResponse);
+	}
+
+	auto response = ClientProtocol::decode_rename_response(rpc_message);
+
+	if (response.status == ClientStatus::Success) {
+		return {};
+	} else {
+		return status_to_error<void>(response.status);
+	}
 }
 
 ClientOperation<FileStats> Client::stat(std::string path) {

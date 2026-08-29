@@ -23,7 +23,7 @@ int main() {
 		std::println("1 Error code: {}", static_cast<int>(res1.error()));
 	}
 
-	auto res2 = client.create_file("folder1/teiuet.txt");
+	auto res2 = client.create_file("folder1/coracao.txt");
 	if (!res2) {
 		std::println("2 Error code: {}", static_cast<int>(res2.error()));
 	}
@@ -35,11 +35,11 @@ int main() {
 	}
 
 	std::println("waiting");
-	std::this_thread::sleep_for(std::chrono::seconds(5));
-	std::println("deleting");
+	std::this_thread::sleep_for(std::chrono::seconds(3));
+	std::println("renaming");
 
-	// Not allowed
-	auto res4 = client.remove("folder1/");
+	// Not allowed, no `folder4/`
+	auto res4 = client.rename("folder1/coracao.txt", "folder4/pin.txt");
 
 	if (!res4) {
 		std::println("4 Error code: {}", static_cast<int>(res4.error()));

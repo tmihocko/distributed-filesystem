@@ -20,7 +20,8 @@ struct PendingWrite {
 	std::array<NodeId, 2> replicas;
 };
 
-using ClientEvent = std::variant<CreateFileRequest, WriteFileRequest, WriteChunkRequest, RemoveRequest, ListRequest, MakeDirRequest>;
+using ClientEvent =
+	std::variant<CreateFileRequest, WriteFileRequest, WriteChunkRequest, RemoveRequest, ListRequest, MakeDirRequest, RenameRequest>;
 
 class MetadataWorker {
   private:
@@ -422,6 +423,21 @@ class MetadataWorker {
 		Frame frame = ClientProtocol::encode_mdkir_response(
 			req.context.request_id,
 			MakeDirResponse{
+				.status = status,
+				.context = req.context,
+			});
+
+		network_.send(req.context.sender.id, std::move(frame));
+	}
+
+	void handle(RenameRequest req) {
+		auto expected = store_.rename(req.old_path, req.new_path);
+
+		ClientStatus status = get_client_status(expected);
+
+		Frame frame = ClientProtocol::encode_rename_response(
+			req.context.request_id,
+			RenameResponse{
 				.status = status,
 				.context = req.context,
 			});
