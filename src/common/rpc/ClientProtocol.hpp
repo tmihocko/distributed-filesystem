@@ -42,6 +42,7 @@ struct FileInfo {
 };
 
 struct FileStat {
+	std::string path;
 	bool is_directory; // false = file, true = directory
 
 	std::array<NodeId, 2> storage_nodes; // machine storing the object

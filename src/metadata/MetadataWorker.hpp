@@ -455,6 +455,7 @@ class MetadataWorker {
 			status = ClientStatus::Success;
 
 			stats = FileStat{
+				.path = metadata->path.string(),
 				.is_directory = false,
 				.storage_nodes = metadata->replica_locations,
 				.object_id = metadata->obj_id,
@@ -469,6 +470,7 @@ class MetadataWorker {
 				status = ClientStatus::Success;
 
 				stats = FileStat{
+					.path = req.path,
 					.is_directory = true,
 					.storage_nodes = {},
 					.object_id = {},

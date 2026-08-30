@@ -14,6 +14,7 @@ static void validate_rpc_message(const ClientRpcMessage &message) {
 }
 
 void FileStat::print() {
+	std::println("{}", path);
 	std::println("\tType: {}", is_directory ? "directory" : "file");
 	std::println("\tSize: {} bytes", size);
 
@@ -393,6 +394,7 @@ Frame ClientProtocol::encode_stat_response(std::uint64_t request_id, const StatR
 
 	writer.write(
 		response.status,
+		stat.path,
 		stat.is_directory,
 		stat.storage_nodes[0],
 		stat.storage_nodes[1],
@@ -407,9 +409,9 @@ StatResponse ClientProtocol::decode_stat_response(const ClientRpcMessage &messag
 	validate_rpc_message<ClientJob::STAT, RpcKind::Response>(message);
 
 	BinaryReader reader{ message.body };
-	const auto [status, is_dir, node_0, node_1, obj_id, size, created, modified] =
+	const auto [status, path, is_dir, node_0, node_1, obj_id, size, created, modified] =
 		reader.read<
-			ClientStatus, bool, NodeId, NodeId, std::string, std::uint64_t,
+			ClientStatus, std::string, bool, NodeId, NodeId, std::string, std::uint64_t,
 			std::chrono::system_clock::time_point, std::chrono::system_clock::time_point>();
 
 	reader.assert_at_end();
@@ -417,6 +419,7 @@ StatResponse ClientProtocol::decode_stat_response(const ClientRpcMessage &messag
 	return StatResponse{
 		.status = status,
 		.stat = FileStat{
+			.path = path,
 			.is_directory = is_dir,
 			.storage_nodes = { node_0, node_1 },
 			.object_id = obj_id,
