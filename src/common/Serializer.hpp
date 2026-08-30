@@ -41,6 +41,10 @@ class BinaryWriter {
 			const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(value.time_since_epoch()).count();
 
 			return write<std::int64_t>(static_cast<std::int64_t>(milliseconds));
+		} else if constexpr (std::is_enum_v<T>) {
+			using Underlying = std::underlying_type_t<T>;
+
+			return write<Underlying>(static_cast<Underlying>(value));
 		} else if constexpr (std::is_integral_v<T>) {
 			return write_integral(value);
 		} else {
@@ -120,11 +124,15 @@ class BinaryReader {
 			return read_string();
 		} else if constexpr (std::is_same_v<bool, T>) {
 			return read<std::uint8_t>() == 1;
-		} else if constexpr (std::is_same_v<std::chrono::system_clock::time_point, T>()) {
+		} else if constexpr (std::is_same_v<std::chrono::system_clock::time_point, T>) {
 			using namespace std::chrono;
 			const auto ms = read<std::int64_t>();
 
 			return system_clock::time_point{ duration_cast<system_clock::time_point::duration>(milliseconds{ ms }) };
+		} else if constexpr (std::is_enum_v<T>) {
+			using Underlying = std::underlying_type_t<T>;
+
+			return static_cast<T>(read<Underlying>());
 		} else if constexpr (std::is_integral_v<T>) {
 			return read_integral<T>();
 		} else {
