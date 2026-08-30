@@ -12,7 +12,8 @@
 
 namespace fs = std::filesystem;
 
-std::chrono::seconds TIMEOUT(3);
+constexpr std::chrono::seconds TIMEOUT{ 3 };
+constexpr std::chrono::seconds READ_CHUNK_TIMEOUT{ 7 };
 
 Client::Client(Endpoint self, std::span<const Endpoint> seed_nodes) : self_(self), network_(self) {
 	network_.start(seed_nodes);
@@ -121,7 +122,7 @@ ClientOperation<void> Client::read_file(std::string from_path, std::string to_pa
 		network_.send(metadata_node_id_, std::move(chunk_frame));
 
 		auto message = network_.receive_if(
-			TIMEOUT,
+			READ_CHUNK_TIMEOUT,
 			Rpc::make_message_is(
 				request_id,
 				ClientJob::READ_CHUNK,

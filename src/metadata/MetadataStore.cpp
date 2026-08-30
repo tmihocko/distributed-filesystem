@@ -266,7 +266,7 @@ std::expected<void, MetadataStoreError> MetadataStore::make_directory(const fs::
 	return {};
 }
 
-std::expected<void, MetadataStoreError> MetadataStore::remove_directory(const std::filesystem::path &path) {
+std::expected<void, MetadataStoreError> MetadataStore::remove_directory(const fs::path &path) {
 	if (!valid_filename(path)) return std::unexpected(MetadataStoreError::INVALID_PATH);
 
 	const fs::path final_path = directory_ / path.relative_path();
@@ -307,18 +307,92 @@ std::expected<std::vector<FileInfo>, MetadataStoreError> MetadataStore::list(con
 	return list;
 }
 
-std::expected<void, MetadataStoreError> MetadataStore::rename(const std::filesystem::path &old_path, const std::filesystem::path &new_path) {
-	std::error_code ec;
+std::expected<void, MetadataStoreError> MetadataStore::rename(const fs::path &old_path, const fs::path &new_path) {
+	if (!valid_filename(old_path) || !valid_filename(new_path)) return std::unexpected(MetadataStoreError::INVALID_PATH);
 
 	const auto old_final_path = directory_ / old_path.relative_path();
 	const auto new_final_path = directory_ / new_path.relative_path();
 
-	if (!fs::exists(old_final_path, ec)) return std::unexpected(MetadataStoreError::NOT_FOUND);
+	std::error_code ec;
+
+	const bool source_exists = fs::exists(old_final_path, ec);
+
 	if (ec) return std::unexpected(MetadataStoreError::READ_FAILURE);
+	if (!source_exists) return std::unexpected(MetadataStoreError::NOT_FOUND);
+
+	if (old_path == new_path) return {};
+
+	const bool destination_exists = fs::exists(new_final_path, ec);
+
+	if (ec) return std::unexpected(MetadataStoreError::READ_FAILURE);
+	if (destination_exists || data_.contains(new_path)) return std::unexpected(MetadataStoreError::ALREADY_EXISTS);
+
+	const bool source_is_directory = fs::is_directory(old_final_path, ec);
+
+	if (ec) return std::unexpected(MetadataStoreError::READ_FAILURE);
+
+	const bool source_is_file = fs::is_regular_file(old_final_path, ec);
+
+	if (ec) return std::unexpected(MetadataStoreError::READ_FAILURE);
+	if (!source_is_directory && !source_is_file) return std::unexpected(MetadataStoreError::INVALID_PATH);
+
+	auto path_is_inside = [](const fs::path &candidate,
+							 const fs::path &directory) {
+		auto candidate_component = candidate.begin();
+		auto directory_component = directory.begin();
+
+		while (directory_component != directory.end()) {
+			if (candidate_component == candidate.end() || *candidate_component != *directory_component) {
+				return false;
+			}
+
+			++candidate_component;
+			++directory_component;
+		}
+
+		return true;
+	};
+
+	std::vector<std::pair<fs::path, fs::path>> renamed_entries;
+
+	if (source_is_file) {
+		if (!data_.contains(old_path)) return std::unexpected(MetadataStoreError::READ_FAILURE);
+
+		renamed_entries.emplace_back(old_path, new_path);
+	} else {
+		for (const auto &[path, metadata] : data_) {
+			if (!path_is_inside(path, old_path)) continue;
+
+			const fs::path relative = path.lexically_relative(old_path);
+
+			renamed_entries.emplace_back(path, new_path / relative);
+		}
+	}
+
+	for (const auto &[old_entry, new_entry] : renamed_entries) {
+		if (data_.contains(new_entry)) {
+			return std::unexpected(MetadataStoreError::ALREADY_EXISTS);
+		}
+	}
 
 	fs::rename(old_final_path, new_final_path, ec);
 
 	if (ec) return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+
+	for (const auto &[old_entry, new_entry] : renamed_entries) {
+		auto node = data_.extract(old_entry);
+
+		if (node.empty()) return std::unexpected(MetadataStoreError::READ_FAILURE);
+
+		node.key() = new_entry;
+		node.mapped().path = new_entry;
+
+		auto insertion = data_.insert(std::move(node));
+
+		if (!insertion.inserted) {
+			return std::unexpected(MetadataStoreError::WRITE_FAILURE);
+		}
+	}
 
 	return {};
 }

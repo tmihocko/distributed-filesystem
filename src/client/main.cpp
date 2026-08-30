@@ -23,7 +23,7 @@ bytes endianness on serializer classes
 */
 
 int main() {
-	Client client{ "cl1.yaml" };
+	Client client{ "config/cl1.yaml" };
 
 	auto res1 = client.mkdir("folder132");
 	if (!res1) {
