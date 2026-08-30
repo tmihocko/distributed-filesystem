@@ -5,6 +5,7 @@ Fix endianness of serialized bytes
 */
 #ifndef SERIALIZER_HPP
 #define SERIALIZER_HPP
+#include <chrono>
 #include <iterator>
 #include <span>
 #include <stdexcept>
@@ -13,7 +14,12 @@ Fix endianness of serialized bytes
 #include <vector>
 
 template <typename T>
-concept BinarySerializable = std::is_trivially_copyable_v<T> || std::is_same_v<std::string, T>;
+concept BinarySerializable =
+	std::is_integral_v<T> ||
+	std::is_enum_v<T> ||
+	std::is_same_v<T, std::string> ||
+	std::is_same_v<T, std::chrono::system_clock::time_point>;
+
 class BinaryWriter {
   public:
 	BinaryWriter() = default;
@@ -31,6 +37,12 @@ class BinaryWriter {
 			return write_string(value);
 		} else if constexpr (std::is_same_v<bool, T>) {
 			return write<std::uint8_t>(value ? 1 : 0);
+		} else if constexpr (std::is_same_v<std::chrono::system_clock::time_point, T>) {
+			const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(value.time_since_epoch()).count();
+
+			return write<std::int64_t>(static_cast<std::int64_t>(milliseconds));
+		} else if constexpr (std::is_integral_v<T>) {
+			return write_integral(value);
 		} else {
 			assert_valid();
 
@@ -40,6 +52,30 @@ class BinaryWriter {
 
 			return *this;
 		}
+	}
+
+	template <typename T>
+		requires std::is_integral_v<T>
+	BinaryWriter &write_integral(T value) {
+		assert_valid();
+
+		using Unsigned = std::make_unsigned_t<T>;
+
+		Unsigned bits;
+
+		if constexpr (std::is_signed_v<T>) {
+			bits = std::bit_cast<Unsigned>(value);
+		} else {
+			bits = static_cast<Unsigned>(value);
+		}
+
+		for (std::size_t index = sizeof(T); index > 0; index--) {
+			const std::size_t shift = (index - 1) * 8;
+
+			buffer_.push_back(static_cast<std::byte>((bits >> shift) & static_cast<Unsigned>(0xff)));
+		}
+
+		return *this;
 	}
 
 	// Writes until null terminator
@@ -84,6 +120,13 @@ class BinaryReader {
 			return read_string();
 		} else if constexpr (std::is_same_v<bool, T>) {
 			return read<std::uint8_t>() == 1;
+		} else if constexpr (std::is_same_v<std::chrono::system_clock::time_point, T>()) {
+			using namespace std::chrono;
+			const auto ms = read<std::int64_t>();
+
+			return system_clock::time_point{ duration_cast<system_clock::time_point::duration>(milliseconds{ ms }) };
+		} else if constexpr (std::is_integral_v<T>) {
+			return read_integral<T>();
 		} else {
 			if (offset_ > data_.size() || sizeof(T) > data_.size() - offset_) {
 				throw std::out_of_range("PacketReader buffer underrun");
@@ -100,6 +143,31 @@ class BinaryReader {
 		requires(sizeof...(Ts) > 1)
 	std::tuple<Ts...> read() {
 		return std::tuple<Ts...>{ read<Ts>()... };
+	}
+
+	template <typename T>
+		requires std::is_integral_v<T>
+	T read_integral() {
+		if (offset_ > data_.size() || sizeof(T) > data_.size() - offset_) {
+			throw std::out_of_range("BinaryReader buffer underrun");
+		}
+
+		using Unsigned = std::make_unsigned_t<T>;
+
+		Unsigned bits = 0;
+
+		for (std::size_t index = 0; index < sizeof(T); ++index) {
+			bits = static_cast<Unsigned>(bits << 8);
+			bits |= static_cast<Unsigned>(std::to_integer<std::uint8_t>(data_[offset_ + index]));
+		}
+
+		offset_ += sizeof(T);
+
+		if constexpr (std::is_signed_v<T>) {
+			return std::bit_cast<T>(bits);
+		} else {
+			return static_cast<T>(bits);
+		}
 	}
 
 	std::string read_string() {
