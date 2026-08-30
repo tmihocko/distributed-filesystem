@@ -8,6 +8,9 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <system_error>
+
+namespace fs = std::filesystem;
 
 std::chrono::seconds TIMEOUT(3);
 
@@ -25,7 +28,7 @@ Client::Client(const std::string &config_file) : Client(Yaml::get_node_info(conf
 
 ClientOperation<void> Client::create_file(std::string path) {
 
-	std::filesystem::path temp{ path };
+	fs::path temp{ path };
 	auto clean_path = temp.lexically_normal().string(); // Remove trailing slashes and other bs
 
 	auto request_id = next_id();
@@ -58,8 +61,133 @@ ClientOperation<void> Client::create_file(std::string path) {
 	}
 }
 
-ClientOperation<std::vector<std::byte>> Client::read_file(std::string path, std::size_t byte_count) {
-	return std::unexpected(ClientError::NotImplemented);
+ClientOperation<void> Client::read_file(std::string from_path, std::string to_path) {
+	auto request_id = next_id();
+
+	ReadFileRequest request{
+		.path = std::move(from_path),
+		.context = {},
+	};
+
+	Frame frame = ClientProtocol::encode_read_file_request(request_id, request);
+
+	network_.send(metadata_node_id_, std::move(frame));
+
+	auto message = network_.receive_if(TIMEOUT, Rpc::make_message_is(request_id, ClientJob::READ_FILE, RpcKind::Response, metadata_node_id_));
+
+	if (!message) return std::unexpected(ClientError::Timeout);
+
+	auto rpc_message = Rpc::read_message<ClientJob>(std::move(*message));
+
+	if (!validate_rpc_header<ClientJob::READ_FILE, RpcKind::Response>(rpc_message.rpc_header, request_id)) {
+		return std::unexpected(ClientError::BadResponse);
+	}
+
+	auto response = ClientProtocol::decode_read_file_response(rpc_message);
+
+	if (response.status != ClientStatus::Success) return status_to_error<void>(response.status);
+
+	const std::uint64_t expected_chunk_count =
+		response.file_size / CHUNK_SIZE +
+		(response.file_size % CHUNK_SIZE != 0);
+
+	if (expected_chunk_count != response.chunk_count) return std::unexpected(ClientError::BadResponse);
+
+	if (to_path.empty()) return std::unexpected(ClientError::BadInput);
+
+	const fs::path destination{ to_path };
+	fs::path temporary = destination;
+	temporary += ".dfs-read-" + std::to_string(request_id) + ".tmp";
+
+	std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+
+	if (!output) return std::unexpected(ClientError::BadInput);
+
+	auto discard_temporary = [&] {
+		output.close();
+
+		std::error_code ignored;
+		fs::remove(temporary, ignored);
+	};
+
+	for (std::uint32_t chunk_index = 0; chunk_index < response.chunk_count; chunk_index++) {
+		ReadChunkRequest chunk_request{
+			.chunk_index = chunk_index,
+			.context = {},
+		};
+
+		Frame chunk_frame = ClientProtocol::encode_read_chunk_request(request_id, chunk_request);
+
+		network_.send(metadata_node_id_, std::move(chunk_frame));
+
+		auto message = network_.receive_if(
+			TIMEOUT,
+			Rpc::make_message_is(
+				request_id,
+				ClientJob::READ_CHUNK,
+				RpcKind::Response,
+				metadata_node_id_,
+				[chunk_index](BinaryReader &reader) {
+					return reader.read<std::uint32_t>() == chunk_index;
+				}));
+
+		if (!message) {
+			discard_temporary();
+			return std::unexpected(ClientError::Timeout);
+		}
+
+		auto rpc_chunk = Rpc::read_message<ClientJob>(std::move(*message));
+
+		if (!validate_rpc_header<ClientJob::READ_CHUNK, RpcKind::Response>(rpc_chunk.rpc_header, request_id)) {
+			discard_temporary();
+			return std::unexpected(ClientError::BadResponse);
+		}
+
+		ReadChunkResponse chunk_response = ClientProtocol::decode_read_chunk_response(rpc_chunk);
+
+		if (chunk_response.status != ClientStatus::Success) {
+			discard_temporary();
+			return status_to_error<void>(chunk_response.status);
+		}
+
+		const std::uint64_t offset = static_cast<std::uint64_t>(chunk_index) * CHUNK_SIZE;
+
+		const std::size_t expected_size = static_cast<std::size_t>(std::min<std::uint64_t>(CHUNK_SIZE, response.file_size - offset));
+
+		if (chunk_response.chunk_index != chunk_index || chunk_response.data.size() != expected_size) {
+			discard_temporary();
+			return std::unexpected(ClientError::BadResponse);
+		}
+
+		output.write(reinterpret_cast<const char *>(chunk_response.data.data()), static_cast<std::streamsize>(chunk_response.data.size()));
+
+		if (!output) {
+			discard_temporary();
+			return std::unexpected(ClientError::ReadError);
+		}
+	}
+
+	output.flush();
+	output.close();
+
+	if (!output) {
+		std::error_code ignored;
+		fs::remove(temporary, ignored);
+
+		return std::unexpected(ClientError::ReadError);
+	}
+
+	std::error_code rename_error;
+	fs::rename(temporary, destination, rename_error);
+
+	if (rename_error) {
+		std::error_code ignored;
+		fs::remove(temporary, ignored);
+
+		return std::unexpected(ClientError::ReadError);
+	} else {
+		return {};
+	}
 }
 
 ClientOperation<void> Client::write_file(std::string local_path, std::string path) {
@@ -69,7 +197,7 @@ ClientOperation<void> Client::write_file(std::string local_path, std::string pat
 
 	if (!file) return std::unexpected(ClientError::BadInput);
 
-	const std::uint64_t file_size = std::filesystem::file_size(local_path);
+	const std::uint64_t file_size = fs::file_size(local_path);
 	const std::uint64_t chunks = file_size / CHUNK_SIZE + (file_size % CHUNK_SIZE != 0);
 
 	if (chunks > std::numeric_limits<std::uint32_t>::max()) return std::unexpected(ClientError::StorageFull);

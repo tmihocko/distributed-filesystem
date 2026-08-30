@@ -1,8 +1,6 @@
 #include "Client.hpp"
-#include <chrono>
 #include <cstdio>
 #include <print>
-#include <thread>
 
 // enum class ClientError : std::uint8_t {
 // 0 	AlreadyExists,
@@ -43,27 +41,11 @@ int main() {
 		std::println("3 Error code: {}", static_cast<int>(res3.error()));
 	}
 
-	std::println("waiting");
-	std::this_thread::sleep_for(std::chrono::seconds(3));
-	std::println("waiting a little bit");
+	std::println("reading");
 
-	std::println("getting file stat");
+	auto r = client.read_file("folder1/teiuet.txt", "cabron.txt");
 
-	auto stat1 = client.stat("folder1/coracao.txt");
-
-	std::println("folder1/coracao.txt");
-	if (!stat1) {
-		std::println("Stat failed for 'folder1/coracao.txt'. Error code: {}", static_cast<int>(stat1.error()));
-	}
-	stat1->print();
-
-	auto stat2 = client.stat("folder132");
-
-	if (!stat2) {
-		std::println("Stat failed for 'folder132'. Error code: {}", static_cast<int>(stat2.error()));
-	}
-	std::println("folder132");
-	stat2->print();
+	if (!r) std::println("4 Error code: {}", static_cast<int>(res3.error()));
 
 	std::println();
 	std::fflush(stdout);

@@ -22,6 +22,7 @@ enum class ClientJob : std::uint8_t {
 	STAT,
 
 	// Internal usage
+	READ_CHUNK,
 	WRITE_CHUNK,
 };
 
@@ -93,6 +94,32 @@ struct CreateFileRequest {
 };
 struct CreateFileResponse {
 	ClientStatus status;
+	RequestContext context;
+};
+
+//
+
+struct ReadFileRequest {
+	std::string path;
+	RequestContext context;
+};
+
+struct ReadFileResponse {
+	ClientStatus status;
+	std::uint64_t file_size;
+	std::uint32_t chunk_count;
+	RequestContext context;
+};
+
+struct ReadChunkRequest {
+	std::uint32_t chunk_index;
+	RequestContext context;
+};
+
+struct ReadChunkResponse {
+	std::uint32_t chunk_index;
+	ClientStatus status;
+	std::vector<std::byte> data;
 	RequestContext context;
 };
 
@@ -193,17 +220,31 @@ CreateFileResponse decode_create_file_response(const ClientRpcMessage &message);
 
 //
 
+Frame encode_read_file_request(std::uint64_t request_id, const ReadFileRequest &request);
+ReadFileRequest decode_read_file_request(const ClientRpcMessage &message);
+
+Frame encode_read_file_response(std::uint64_t request_id, const ReadFileResponse &response);
+ReadFileResponse decode_read_file_response(const ClientRpcMessage &message);
+
+Frame encode_read_chunk_request(std::uint64_t request_id, const ReadChunkRequest &request);
+ReadChunkRequest decode_read_chunk_request(const ClientRpcMessage &message);
+
+Frame encode_read_chunk_response(std::uint64_t request_id, const ReadChunkResponse &response);
+ReadChunkResponse decode_read_chunk_response(const ClientRpcMessage &message);
+
+//
+
 Frame encode_write_file_request(std::uint64_t request_id, const WriteFileRequest &request);
 WriteFileRequest decode_write_file_request(const ClientRpcMessage &message);
+
+Frame encode_write_file_response(std::uint64_t request_id, const WriteFileResponse &response);
+WriteFileResponse decode_write_file_response(const ClientRpcMessage &message);
 
 Frame encode_write_chunk_request(std::uint64_t request_id, const WriteChunkRequest &request);
 WriteChunkRequest decode_write_chunk_request(const ClientRpcMessage &message);
 
 Frame encode_write_chunk_response(std::uint64_t request_id, const WriteChunkResponse &request);
 WriteChunkResponse decode_write_chunk_response(const ClientRpcMessage &message);
-
-Frame encode_write_file_response(std::uint64_t request_id, const WriteFileResponse &response);
-WriteFileResponse decode_write_file_response(const ClientRpcMessage &message);
 
 //
 

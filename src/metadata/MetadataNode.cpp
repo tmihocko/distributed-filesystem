@@ -125,6 +125,12 @@ void MetadataNode::push_worker_job(Message message) {
 		case ClientJob::CREATE_FILE:
 			job_queue_.push(ClientProtocol::decode_create_file_request(rpc_message));
 			break;
+		case ClientJob::READ_FILE:
+			job_queue_.push(ClientProtocol::decode_read_file_request(rpc_message));
+			break;
+		case ClientJob::READ_CHUNK:
+			job_queue_.push(ClientProtocol::decode_read_chunk_request(rpc_message));
+			break;
 		case ClientJob::WRITE_FILE:
 			job_queue_.push(ClientProtocol::decode_write_file_request(rpc_message));
 			break;

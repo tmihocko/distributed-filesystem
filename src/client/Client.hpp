@@ -25,7 +25,7 @@ class Client {
 	ClientOperation<void> create_file(std::string path);
 
 	[[nodiscard]]
-	ClientOperation<std::vector<std::byte>> read_file(std::string path, std::size_t byte_count);
+	ClientOperation<void> read_file(std::string from_path, std::string to_path);
 
 	ClientOperation<void> write_file(std::string local_path, std::string path);
 

@@ -27,6 +27,7 @@ enum class StorageStatus : std::uint8_t {
 	Success,
 	NoSpace,
 	WriteError,
+	ReadError,
 	InvalidRequest,
 };
 
@@ -44,6 +45,23 @@ struct PutResponse {
 	StorageStatus status;
 };
 
+//
+
+struct GetRequest {
+	std::string object_id;
+	std::uint32_t chunk_index;
+	std::uint32_t byte_count;
+	RequestContext context;
+};
+
+struct GetResponse {
+	std::uint32_t chunk_index;
+	StorageStatus status;
+	std::vector<std::byte> data;
+};
+
+//
+
 struct DeleteRequest {
 	std::string object_id;
 	RequestContext context;
@@ -60,6 +78,14 @@ PutRequest decode_put_request(const StorageRpcMessage &message);
 
 Frame encode_put_response(std::uint64_t request_id, const PutResponse &response);
 PutResponse decode_put_response(const StorageRpcMessage &message);
+
+//
+
+Frame encode_get_request(std::uint64_t request_id, const GetRequest &request);
+GetRequest decode_get_request(const StorageRpcMessage &message);
+
+Frame encode_get_response(std::uint64_t request_id, const GetResponse &response);
+GetResponse decode_get_response(const StorageRpcMessage &message);
 
 //
 

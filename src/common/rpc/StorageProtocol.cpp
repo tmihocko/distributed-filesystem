@@ -18,11 +18,7 @@ Frame StorageProtocol::encode_put_request(std::uint64_t request_id, const PutReq
 			request.final_chunk)
 		.write_bytes(request.data);
 
-	return Rpc::make_frame(
-		request_id,
-		StorageJob::PUT,
-		RpcKind::Request,
-		writer.move_data());
+	return Rpc::make_frame(request_id, StorageJob::PUT, RpcKind::Request, writer.move_data());
 }
 
 PutRequest StorageProtocol::decode_put_request(const StorageRpcMessage &message) {
@@ -50,11 +46,7 @@ Frame StorageProtocol::encode_put_response(
 
 	writer.write(response.chunk_index, response.size_available, response.status);
 
-	return Rpc::make_frame(
-		request_id,
-		StorageJob::PUT,
-		RpcKind::Response,
-		writer.move_data());
+	return Rpc::make_frame(request_id, StorageJob::PUT, RpcKind::Response, writer.move_data());
 }
 
 PutResponse StorageProtocol::decode_put_response(
@@ -73,16 +65,68 @@ PutResponse StorageProtocol::decode_put_response(
 		.status = status,
 	};
 }
+//
+
+Frame StorageProtocol::encode_get_request(std::uint64_t request_id, const GetRequest &request) {
+	BinaryWriter writer;
+
+	writer.write(request.object_id, request.chunk_index, request.byte_count);
+
+	return Rpc::make_frame(request_id, StorageJob::GET, RpcKind::Request, writer.move_data());
+}
+
+GetRequest StorageProtocol::decode_get_request(const StorageRpcMessage &message) {
+	validate_storage_message<StorageJob::GET, RpcKind::Request>(message);
+
+	BinaryReader reader{ message.body };
+
+	const auto [object_id, chunk_index, byte_count] = reader.read<std::string, std::uint32_t, std::uint32_t>();
+
+	reader.assert_at_end();
+
+	return GetRequest{
+		.object_id = std::move(object_id),
+		.chunk_index = chunk_index,
+		.byte_count = byte_count,
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame StorageProtocol::encode_get_response(std::uint64_t request_id, const GetResponse &response) {
+	BinaryWriter writer;
+
+	writer.write(
+		response.chunk_index,
+		response.status);
+
+	writer.write_bytes(response.data);
+
+	return Rpc::make_frame(request_id, StorageJob::GET, RpcKind::Response, writer.move_data());
+}
+
+GetResponse StorageProtocol::decode_get_response(const StorageRpcMessage &message) {
+	validate_storage_message<StorageJob::GET, RpcKind::Response>(message);
+
+	BinaryReader reader{ message.body };
+
+	const auto [chunk_index, status] = reader.read<std::uint32_t, StorageStatus>();
+
+	auto data = reader.read_remaining();
+
+	return GetResponse{
+		.chunk_index = chunk_index,
+		.status = status,
+		.data = std::move(data),
+	};
+}
+
+//
 
 Frame StorageProtocol::encode_delete_request(std::uint64_t request_id, const DeleteRequest &request) {
 	BinaryWriter writer;
 	writer.write(request.object_id);
 
-	return Rpc::make_frame(
-		request_id,
-		StorageJob::DELETE,
-		RpcKind::Request,
-		writer.move_data());
+	return Rpc::make_frame(request_id, StorageJob::DELETE, RpcKind::Request, writer.move_data());
 }
 
 DeleteRequest StorageProtocol::decode_delete_request(const StorageRpcMessage &message) {
@@ -103,11 +147,7 @@ Frame StorageProtocol::encode_delete_response(std::uint64_t request_id, const De
 	BinaryWriter writer;
 	writer.write(response.status);
 
-	return Rpc::make_frame(
-		request_id,
-		StorageJob::DELETE,
-		RpcKind::Response,
-		writer.move_data());
+	return Rpc::make_frame(request_id, StorageJob::DELETE, RpcKind::Response, writer.move_data());
 }
 
 DeleteResponse StorageProtocol::decode_delete_response(const StorageRpcMessage &message) {

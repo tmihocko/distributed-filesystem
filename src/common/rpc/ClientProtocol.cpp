@@ -220,6 +220,114 @@ MakeDirResponse ClientProtocol::decode_mkdir_response(const ClientRpcMessage &me
 		.context = RequestContext::from(message),
 	};
 }
+
+//
+
+Frame ClientProtocol::encode_read_file_request(std::uint64_t request_id, const ReadFileRequest &request) {
+	BinaryWriter writer;
+
+	writer.write(request.path);
+
+	return Rpc::make_frame(request_id, ClientJob::READ_FILE, RpcKind::Request, writer.move_data());
+}
+
+ReadFileRequest ClientProtocol::decode_read_file_request(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::READ_FILE, RpcKind::Request>(message);
+
+	BinaryReader reader{ message.body };
+
+	auto path = reader.read<std::string>();
+
+	reader.assert_at_end();
+
+	return ReadFileRequest{
+		.path = std::move(path),
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame ClientProtocol::encode_read_file_response(std::uint64_t request_id, const ReadFileResponse &response) {
+	BinaryWriter writer;
+
+	writer.write(response.status, response.file_size, response.chunk_count);
+
+	return Rpc::make_frame(request_id, ClientJob::READ_FILE, RpcKind::Response, writer.move_data());
+}
+
+ReadFileResponse ClientProtocol::decode_read_file_response(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::READ_FILE, RpcKind::Response>(message);
+
+	BinaryReader reader{ message.body };
+
+	const auto [status, file_size, chunk_count] = reader.read<ClientStatus, std::uint64_t, std::uint32_t>();
+
+	reader.assert_at_end();
+
+	return ReadFileResponse{
+		.status = status,
+		.file_size = file_size,
+		.chunk_count = chunk_count,
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame ClientProtocol::encode_read_chunk_request(std::uint64_t request_id, const ReadChunkRequest &request) {
+	BinaryWriter writer;
+
+	writer.write(request.chunk_index);
+
+	return Rpc::make_frame(request_id, ClientJob::READ_CHUNK, RpcKind::Request, writer.move_data());
+}
+
+ReadChunkRequest ClientProtocol::decode_read_chunk_request(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::READ_CHUNK, RpcKind::Request>(message);
+
+	BinaryReader reader{ message.body };
+
+	const auto chunk_index = reader.read<std::uint32_t>();
+
+	reader.assert_at_end();
+
+	return ReadChunkRequest{
+		.chunk_index = chunk_index,
+		.context = RequestContext::from(message),
+	};
+}
+
+Frame ClientProtocol::encode_read_chunk_response(std::uint64_t request_id, const ReadChunkResponse &response) {
+	BinaryWriter writer;
+
+	writer.write(
+		response.chunk_index,
+		response.status);
+
+	writer.write_bytes(response.data);
+
+	return Rpc::make_frame(
+		request_id,
+		ClientJob::READ_CHUNK,
+		RpcKind::Response,
+		writer.move_data());
+}
+
+ReadChunkResponse ClientProtocol::decode_read_chunk_response(const ClientRpcMessage &message) {
+	validate_rpc_message<ClientJob::READ_CHUNK, RpcKind::Response>(message);
+	BinaryReader reader{ message.body };
+
+	const auto [chunk_index, status] = reader.read<std::uint32_t, ClientStatus>();
+
+	auto data = reader.read_remaining();
+
+	return ReadChunkResponse{
+		.chunk_index = chunk_index,
+		.status = status,
+		.data = std::move(data),
+		.context = RequestContext::from(message),
+	};
+}
+
+//
+
 Frame ClientProtocol::encode_write_file_request(std::uint64_t request_id, const WriteFileRequest &request) {
 	BinaryWriter writer;
 
